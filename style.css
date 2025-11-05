@@ -39,3 +39,31 @@ select{border:1px solid var(--border);padding:8px;border-radius:8px;background:#
   .cards{grid-template-columns:repeat(2,1fr)}
   .grid{grid-template-columns:1fr}
 }
+
+/* Página do mapa full-width */
+.map-full {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.map-container {
+  width: 100%;
+  min-height: 80vh;
+  background: #fff;
+  padding: 10px 0;
+}
+
+.map-title {
+  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--primary);
+}
+
+.map-chart {
+  width: 100%;
+  min-height: 78vh;
+}
+
