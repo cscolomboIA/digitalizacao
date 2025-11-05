@@ -32,3 +32,26 @@ select{border:1px solid var(--border);padding:8px;border-radius:8px;background:#
   .cards{grid-template-columns:repeat(2,1fr)}
   .grid{grid-template-columns:1fr}
 }
+
+.header{
+  display:flex;
+  justify-content:flex-start;
+  align-items:center;
+  padding:10px 20px;
+  border-bottom:1px solid var(--border);
+  background:#fff;
+}
+
+.logo{
+  width:80px;
+  height:auto;
+  margin-right:15px;
+}
+
+.compact-header .brand-text h1{
+  font-size:20px;
+  font-weight:700;
+  margin:0;
+  color:var(--primary);
+}
+
