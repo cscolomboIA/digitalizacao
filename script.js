@@ -1,3 +1,4 @@
+// script.js (versão ultra-segura)
 
 const FILE_PATH = 'data.xlsx';
 
@@ -15,30 +16,30 @@ const COLS = {
   processo: 'Nº Processo Autuado'
 };
 
+function el(id){ return document.getElementById(id); }
+function text(id, v){ const e = el(id); if(e) e.textContent = v; }
 function normalize(x){ return (x===undefined||x===null) ? '' : String(x).trim(); }
 function renameFuncaoToBolsista(v){ return (v||'').toLowerCase().includes('orientador') ? 'Bolsistas CAR' : (v||''); }
-function setKPI(id, val){ const el=document.getElementById(id); if(el) el.innerText = val; }
 function hasColumn(rows, col){ return rows.length>0 && rows[0] && Object.prototype.hasOwnProperty.call(rows[0], col); }
 
 function groupCount(rows, keySelector){
   const m = new Map();
-  rows.forEach(r=>{ const k=keySelector(r); if(k) m.set(k, (m.get(k)||0)+1); });
-  return Array.from(m, ([k,v])=>({key:k,value:v})).sort((a,b)=>b.value-a.value);
+  rows.forEach(r => { const k = keySelector(r); if(k) m.set(k, (m.get(k)||0)+1); });
+  return Array.from(m, ([key, value]) => ({ key, value })).sort((a,b)=>b.value-a.value);
 }
 
 function plotBar(divId, labels, values, title){
-  const div = document.getElementById(divId);
-  if(!div) return;
-  Plotly.newPlot(div,[{x:labels,y:values,type:'bar',text:values.map(String),textposition:'auto'}],
-    {title, margin:{t:30,r:10,b:80,l:50}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)' },
-    {displayModeBar:false, responsive:true});
+  const div = el(divId); if(!div) return;
+  Plotly.newPlot(div, [{ x: labels, y: values, type: 'bar', text: values.map(String), textposition: 'auto' }],
+    { title, margin:{t:30,r:10,b:80,l:50}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)' },
+    { displayModeBar:false, responsive:true });
 }
 
 function plotPie(divId, labels, values, title){
-  const div = document.getElementById(divId);
-  if(!div) return;
-  Plotly.newPlot(div,[{labels,values,type:'pie',hole:.35}],{title, margin:{t:30,r:10,b:10,l:10}},
-    {displayModeBar:false, responsive:true});
+  const div = el(divId); if(!div) return;
+  Plotly.newPlot(div, [{ labels, values, type:'pie', hole:.35 }],
+    { title, margin:{t:30,r:10,b:10,l:10} },
+    { displayModeBar:false, responsive:true });
 }
 
 async function loadXLSX(){
@@ -48,12 +49,11 @@ async function loadXLSX(){
   const wb = XLSX.read(buf, { type:'array' });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
-  const info = document.getElementById('fileInfo');
-  if(info) info.textContent = `Arquivo: ${FILE_PATH} • Planilha: ${wb.SheetNames[0] || '1'}`;
+  const info = el('fileInfo'); if (info) info.textContent = `Arquivo: ${FILE_PATH} • Planilha: ${wb.SheetNames[0] || '1'}`;
   return json;
 }
 
-(async function(){
+async function main(){
   try{
     const rows = await loadXLSX();
 
@@ -61,62 +61,51 @@ async function loadXLSX(){
     const total = rows.length;
     const campi = new Set(rows.map(r => normalize(r[COLS.campus]))).size;
     const municipios = new Set(rows.map(r => normalize(r[COLS.municipio]))).size;
-    const orientadoresCount = rows.filter(r => normalize(r[COLS.funcao]).toLowerCase().includes('orientador')).length;
+    const orientadores = rows.filter(r => normalize(r[COLS.funcao]).toLowerCase().includes('orientador')).length;
 
-    setKPI('kpiTotal', total);
-    setKPI('kpiCampi', campi || '—');
-    setKPI('kpiMunicipios', municipios || '—');
-    setKPI('kpiOrientadores', orientadoresCount || '—');
+    text('kpiTotal', total || '—');
+    text('kpiCampi', campi || '—');
+    text('kpiMunicipios', municipios || '—');
+    text('kpiOrientadores', orientadores || '—');
 
-    // Charts
-    plotBar('chartCampus',
-      groupCount(rows, r=>normalize(r[COLS.campus])).map(x=>x.key),
-      groupCount(rows, r=>normalize(r[COLS.campus])).map(x=>x.value),
-      'Registros por Campus'
-    );
+    // Gráficos principais (presentes em todas as variantes do HTML)
+    const byCampus = groupCount(rows, r => normalize(r[COLS.campus]));
+    plotBar('chartCampus', byCampus.map(x=>x.key), byCampus.map(x=>x.value), 'Registros por Campus');
 
-    plotBar('chartMunicipio',
-      groupCount(rows, r=>normalize(r[COLS.municipio])).map(x=>x.key),
-      groupCount(rows, r=>normalize(r[COLS.municipio])).map(x=>x.value),
-      'Registros por Município'
-    );
+    const byMun = groupCount(rows, r => normalize(r[COLS.municipio]));
+    plotBar('chartMunicipio', byMun.map(x=>x.key), byMun.map(x=>x.value), 'Registros por Município');
 
-    plotPie('chartFuncao',
-      groupCount(rows, r=>renameFuncaoToBolsista(normalize(r[COLS.funcao]))).map(x=>x.key),
-      groupCount(rows, r=>renameFuncaoToBolsista(normalize(r[COLS.funcao]))).map(x=>x.value),
-      'Distribuição por Função'
-    );
+    const byFunc = groupCount(rows, r => renameFuncaoToBolsista(normalize(r[COLS.funcao])));
+    plotPie('chartFuncao', byFunc.map(x=>x.key), byFunc.map(x=>x.value), 'Distribuição por Função');
 
-    // Optional panels
+    // Painel de títulos/processos (se existir no HTML)
     const hasTitulo = hasColumn(rows, COLS.tituloEmitido) || hasColumn(rows, COLS.tituloValidado);
     const hasProc   = hasColumn(rows, COLS.processo);
 
-    if(hasTitulo){
-      const badge = document.getElementById('badgeTitulo');
-      if (badge) { badge.classList.remove('warn'); badge.textContent = 'ok'; }
-      const emit = rows.filter(r => normalize(r[COLS.tituloEmitido])==='Sim').length;
-      const val  = rows.filter(r => normalize(r[COLS.tituloValidado])==='Sim').length;
-      plotBar('chartTitulo', ['Emitidos','Validados'], [emit,val], 'Títulos CAR — Emitidos x Validados');
-    }
+    const emit = hasTitulo ? rows.filter(r => normalize(r[COLS.tituloEmitido]) === 'Sim').length : 0;
+    const valid = hasTitulo ? rows.filter(r => normalize(r[COLS.tituloValidado]) === 'Sim').length : 0;
 
-    if(hasProc){
-      const badge = document.getElementById('badgeProcesso');
-      if (badge) { badge.classList.remove('warn'); badge.textContent = 'ok'; }
+    // Se existir um painel único "chartTitulo", usa ele; senão, ignora silenciosamente
+    if (el('chartTitulo')) {
+      const labels = hasTitulo ? ['Emitidos','Validados'] : ['Sem dados'];
+      const values = hasTitulo ? [emit, valid] : [0];
+      plotBar('chartTitulo', labels, values, 'Títulos / Processos');
+    }
+    // Se existirem os antigos "badge..." e "chartProc"/"chartTitulo", também funcionará:
+    if (el('chartProc') && hasProc){
       const byProc = groupCount(rows, r => normalize(r[COLS.processo]));
       plotBar('chartProc', byProc.map(x=>x.key || '—'), byProc.map(x=>x.value), 'Processos Autuados');
     }
 
-    // DataTable
-    const tableEl = document.getElementById('dataTable');
-    if (tableEl && rows.length){
-      const cols = Object.keys(rows[0]).map(k => ({ title: k, data: k }));
+    // DataTable (só inicializa se o elemento existe)
+    if (el('dataTable') && rows.length){
+      const cols = Object.keys(rows[0]).map(k => ({ title:k, data:k }));
       const t = $('#dataTable').DataTable({ data: rows, columns: cols, dom: 'Bfrtip', buttons: [{ extend:'csvHtml5', title:'dados_car' }], pageLength: 10 });
-      const btn = document.getElementById('btnDownloadCSV');
-      if (btn) btn.addEventListener('click', ()=> t.button('.buttons-csv').trigger());
+      const btn = el('btnDownloadCSV'); if (btn) btn.addEventListener('click', ()=> t.button('.buttons-csv').trigger());
     }
 
-    // Theme toggle (safe)
-    const toggle = document.getElementById('themeToggle');
+    // Botão Tema (só se existir)
+    const toggle = el('themeToggle');
     if (toggle){
       toggle.addEventListener('click', ()=>{
         const root = document.documentElement;
@@ -129,4 +118,11 @@ async function loadXLSX(){
     alert('Erro ao carregar o dashboard: ' + err.message);
     console.error(err);
   }
-})();
+}
+
+// Aguarda DOM pronto (e usa defer no script)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', main);
+} else {
+  main();
+}
