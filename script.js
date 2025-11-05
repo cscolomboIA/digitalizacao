@@ -13,7 +13,6 @@ const COLS = {
   tituloValidado: 'Título CAR Validado',
   processo: 'Nº Processo Autuado'
 };
-
 function el(id){ return document.getElementById(id); }
 function normalize(x){ return (x===undefined||x===null) ? '' : String(x).trim(); }
 function renameFuncaoToBolsista(v){ return (v||'').toLowerCase().includes('orientador') ? 'Bolsistas CAR' : (v||''); }
@@ -44,9 +43,7 @@ async function loadXLSX(){
   const buf = await res.arrayBuffer();
   const wb = XLSX.read(buf, { type:'array' });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
-  const info = el('fileInfo'); if (info) info.textContent = `Arquivo: data.xlsx • Planilha: ${wb.SheetNames[0] || '1'}`;
-  return json;
+  return XLSX.utils.sheet_to_json(ws, { defval: '' });
 }
 function populateFilters(rows){
   function fill(selId, values){
@@ -101,12 +98,6 @@ async function main(){
   populateFilters(ALL_ROWS);
   ['fCampus','fMunicipio','fFuncao'].forEach(id=> el(id)?.addEventListener('change', refresh));
   el('btnLimpar')?.addEventListener('click', ()=>{ ['fCampus','fMunicipio','fFuncao'].forEach(id=>{ const s=el(id); if(s) s.value=''; }); refresh(); });
-  el('themeToggle')?.addEventListener('click', ()=>{
-    const root = document.documentElement;
-    const current = root.getAttribute('data-theme');
-    const next = current === 'dark' ? '' : 'dark';
-    if (next) root.setAttribute('data-theme', next); else root.removeAttribute('data-theme');
-  });
   refresh();
 }
 if (document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', main); } else { main(); }

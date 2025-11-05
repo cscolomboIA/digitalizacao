@@ -1,8 +1,6 @@
 
 const FILE_PATH = 'data.xlsx';
-const COLS = {
-  municipio: '3) Município onde reside:'
-};
+const COLS = { municipio: '3) Município onde reside:' };
 const ES_CENTROIDS = {
   "Vitória": [-40.3089, -20.3155],
   "Vila Velha": [-40.2922, -20.3297],
@@ -15,7 +13,6 @@ const ES_CENTROIDS = {
   "São Mateus": [-39.8647, -18.7201],
   "Aracruz": [-40.2734, -19.8198]
 };
-function el(id){ return document.getElementById(id); }
 function normalize(x){ return (x===undefined||x===null) ? '' : String(x).trim(); }
 function groupCount(rows, keySelector){
   const m = new Map();
@@ -42,11 +39,8 @@ async function main(){
     sizes.push(10 + Math.min(40, count*3));
     texts.push(`${name}: ${count}`);
   });
-  const data=[{
-    type:'scattergeo', lon:lons, lat:lats, text:texts, mode:'markers+text', textposition:'top center',
-    marker:{ size:sizes, line:{width:1,color:'#333'} }
-  }];
-  // Focused only on ES bounding box
+  const data=[{ type:'scattergeo', lon:lons, lat:lats, text:texts, mode:'markers+text', textposition:'top center',
+    marker:{ size:sizes, line:{width:1,color:'#333'} } }];
   const layout = { geo:{
       projection:{type:'mercator'},
       lonaxis:{range:[-41.7, -39.3]},
