@@ -1,15 +1,14 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
+  <title>IntegraCAR · Dashboard CAR</title>
+  
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>IntegraCAR · Dashboard CAR</title>
   <link rel="icon" type="image/png" href="favicon.png"/>
   <link rel="stylesheet" href="style.css"/>
-
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
-
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
@@ -18,9 +17,9 @@
   <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.3/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
 </head>
 <body>
-
 <header class="header">
   <div class="brand">
     <img class="logo" src="logo.png" alt="IntegraCAR"/>
@@ -36,8 +35,14 @@
   </div>
 </header>
 
-<main class="container">
 
+<nav class="topnav">
+  <a href="index.html" class="active">Dashboard</a>
+  <a href="map.html">Mapa ES</a>
+</nav>
+
+
+<main class="container">
 <section class="filters card">
   <div class="filter-group">
     <label for="fCampus">Campus</label>
@@ -65,7 +70,6 @@
   <div class="panel"><div class="panel-header"><h2>Registros por Campus</h2></div><div id="chartCampus" class="chart"></div></div>
   <div class="panel"><div class="panel-header"><h2>Registros por Município</h2></div><div id="chartMunicipio" class="chart"></div></div>
   <div class="panel"><div class="panel-header"><h2>Distribuição por Função</h2></div><div id="chartFuncao" class="chart"></div></div>
-  <div class="panel"><div class="panel-header"><h2>Mapa (ES) — por Município</h2></div><div id="chartMapa" class="chart"></div></div>
 </section>
 
 <section class="panel wide">
@@ -75,10 +79,9 @@
   </div>
   <table id="dataTable" class="display compact" style="width:100%"></table>
 </section>
-
 </main>
 
 <footer class="footer">IntegraCAR Dashboard — GitHub Pages</footer>
-<script src="script.js?v=5" defer></script>
+<script src="script.js?v=6" defer></script>
 </body>
 </html>

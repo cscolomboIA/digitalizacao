@@ -1,18 +1,11 @@
-# IntegraCAR · Dashboard CAR (PRO — GitHub Pages)
 
-Inclui:
-- Filtros (Campus, Município, Função)
-- KPIs com animação
-- Gráficos Plotly + Mapa (ES)
-- Tabela DataTables + Exportar CSV
-- Botão "Baixar Excel"
-- Favicon gerado a partir da sua logo
-- `config.json` para cores/logo (tema claro padrão)
+# IntegraCAR · Dashboard CAR (Tabs + Página de Mapa ES)
 
-## Publicação (GitHub Pages)
-1. Crie um repositório e faça upload dos arquivos desta pasta na **raiz** do repo.
-2. Em *Settings → Pages*, defina **Deploy from a branch** e branch `main`.
-3. Abra a URL fornecida.
+- Aba **Dashboard** (index.html): KPIs, filtros, gráficos e tabela
+- Aba **Mapa ES** (map.html): mapa full-page focado no Espírito Santo (lon/lat range)
+- `data.xlsx` com 50 registros sintéticos
+- `config.json` com tema claro e logo
+- `favicon.png` gerado da logo
 
-## Atualização de dados
-- Substitua `data.xlsx` com as mesmas colunas. O site recarrega os gráficos.
+## Publicação
+Envie todos os arquivos para a raiz do repositório e ative o GitHub Pages.
