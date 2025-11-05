@@ -1,0 +1,12 @@
+{
+  "brand": {
+    "primary": "#2A61A8",
+    "secondary": "#E39BB1",
+    "accent": "#E39BB1",
+    "mode": "light"
+  },
+  "logo": {
+    "path": "logo.png",
+    "width": 120
+  }
+}
