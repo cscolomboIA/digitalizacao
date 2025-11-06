@@ -1,13 +1,13 @@
 
-// script.js — left labels only + hide "Distribuição por Função" title
+// script.js — adaptive schema; horizontal bars with left labels only; third panel removed
 const FILE_PATH = 'data.xlsx';
 
 function el(id){ return document.getElementById(id); }
 function normalize(x){ return (x===undefined||x===null) ? '' : String(x).trim(); }
 
-// Adaptive schemas (same as before, trimmed for brevity)
 const SCHEMAS = {
   survey: {
+    label: 'Pesquisa IntegraCAR',
     cols: {
       municipio: '3) Município onde reside:',
       campus: 'Campus de Atuação',
@@ -16,6 +16,7 @@ const SCHEMAS = {
     bolsistaRule: (row, cols) => String(row[cols.funcao]||'').toLowerCase().includes('orientador')
   },
   titulo: {
+    label: 'Base de Títulos',
     cols: {
       municipio: 'NOME MUNICÍPIO',
       campus: null,
@@ -38,26 +39,17 @@ function groupCount(rows, keySelector){
   return Array.from(m, ([key,value])=>({key,value})).sort((a,b)=>b.value-a.value);
 }
 
-// Horizontal bars with ONLY left tick labels (no text on bars)
-function plotBarLeftLabels(divId, labels, values, title){
+function plotBarLeft(divId, labels, values, title){
   const div = el(divId); if(!div) return;
   const maxLen = Math.max(0, ...labels.map(l => String(l||'').length));
-  const h = Math.max(320, Math.min(1400, 26*labels.length + 80));
+  const h = Math.max(320, Math.min(1600, 26*labels.length + 80));
   Plotly.newPlot(div, [{
-    y: labels,
-    x: values,
-    type: 'bar',
-    orientation: 'h',
-    hovertemplate: '%{y}: %{x}<extra></extra>',
-    cliponaxis: false
+    y: labels, x: values, type:'bar', orientation:'h',
+    hovertemplate:'%{y}: %{x}<extra></extra>', cliponaxis:false
   }], {
-    title,   // título só para os gráficos principais
-    height: h,
-    margin: {t: 30, l: Math.min(340, 10*maxLen), r: 10},
-    xaxis: {automargin: true},
-    yaxis: {automargin: true, tickfont: {size: 11}},
-    paper_bgcolor:'rgba(0,0,0,0)',
-    plot_bgcolor:'rgba(0,0,0,0)'
+    title, height:h, margin:{t:30, l:Math.min(360, 10*maxLen), r:10},
+    xaxis:{automargin:true}, yaxis:{automargin:true, tickfont:{size:11}},
+    paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)'
   }, {displayModeBar:false, responsive:true});
 }
 
@@ -138,23 +130,24 @@ function refresh(){
       : rows.filter(r=> defs.bolsistaRule(r, cols)).length;
   animateCount(el('kpiOrientadores'), bolsistasVal);
 
-  // Charts with left-only labels
-  const byMun = groupCount(rows, r=> normalize(r[cols.municipio]));
-  plotBarLeftLabels('chartMunicipio', byMun.map(x=>x.key), byMun.map(x=>x.value),
-    defs===SCHEMAS.titulo ? 'Registros por Município (Títulos)' : 'Registros por Município');
-
+  // Charts
   if (defs===SCHEMAS.titulo){
+    el('leftTitle').textContent = 'Registros por Autor';
     const byAutor = groupCount(rows, r=> normalize(r[cols.funcao]));
-    plotBarLeftLabels('chartCampus', byAutor.map(x=>x.key), byAutor.map(x=>x.value), 'Registros por Autor');
+    plotBarLeft('chartCampus', byAutor.map(x=>x.key), byAutor.map(x=>x.value), 'Registros por Autor');
   } else {
+    el('leftTitle').textContent = 'Registros por Campus';
     const byCampus = groupCount(rows, r=> normalize(r[cols.campus]));
-    plotBarLeftLabels('chartCampus', byCampus.map(x=>x.key), byCampus.map(x=>x.value), 'Registros por Campus');
+    plotBarLeft('chartCampus', byCampus.map(x=>x.key), byCampus.map(x=>x.value), 'Registros por Campus');
   }
+  const byMun = groupCount(rows, r=> normalize(r[cols.municipio]));
+  plotBarLeft('chartMunicipio', byMun.map(x=>x.key), byMun.map(x=>x.value), 'Registros por Município');
 
-  // Hide the panel header/title for the third panel (chartFuncao) and remove plot title
-  const funcPanelHeader = document.querySelector('#chartFuncao')?.closest('.panel')?.querySelector('.panel-header');
-  if (funcPanelHeader) funcPanelHeader.style.display = 'none';
-  Plotly.newPlot('chartFuncao', [], {margin:{t:0}}, {displayModeBar:false, responsive:true});
+  // Guarantee no third panel leftovers
+  const ghost = document.getElementById('chartFuncao');
+  if (ghost && window.Plotly) Plotly.purge(ghost);
+  const ghostPanel = ghost?.closest('.panel');
+  if (ghostPanel) ghostPanel.style.display = 'none';
 
   // DataTable
   if (el('dataTable')){
@@ -181,9 +174,6 @@ async function main(){
   });
   ACTIVE = detectSchema(rows);
   ALL_ROWS = rows;
-  // Tag header for dynamic left chart title (kept from previous versions)
-  const leftPanelHdr = document.querySelector('.panel h2');
-  if (leftPanelHdr) leftPanelHdr.setAttribute('data-panel-left-title', '1');
   setupFilters(ALL_ROWS, ACTIVE.def);
   refresh();
 }

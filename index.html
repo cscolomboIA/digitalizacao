@@ -20,13 +20,10 @@
 
 </head>
 <body>
-
 <header class="header">
   <div class="brand compact-header">
     <img class="logo" src="logo.png" alt="IntegraCAR"/>
-    <div class="brand-text">
-      <h1>IntegraCAR · Dashboard CAR</h1>
-    </div>
+    <div class="brand-text"><h1>IntegraCAR · Dashboard CAR</h1></div>
   </div>
 </header>
 
@@ -36,45 +33,50 @@
 </nav>
 
 <main class="container">
-<section class="filters card">
-  <div class="filter-group">
-    <label for="fCampus">Campus</label>
-    <select id="fCampus"><option value="">Todos</option></select>
-  </div>
-  <div class="filter-group">
-    <label for="fMunicipio">Município</label>
-    <select id="fMunicipio"><option value="">Todos</option></select>
-  </div>
-  <div class="filter-group">
-    <label for="fFuncao">Função</label>
-    <select id="fFuncao"><option value="">Todas</option></select>
-  </div>
-  <button id="btnLimpar" class="btn">Limpar filtros</button>
-</section>
+  <section class="filters card">
+    <div class="filter-group">
+      <label for="fCampus">Campus</label>
+      <select id="fCampus"><option value="">Todos</option></select>
+    </div>
+    <div class="filter-group">
+      <label for="fMunicipio">Município</label>
+      <select id="fMunicipio"><option value="">Todos</option></select>
+    </div>
+    <div class="filter-group">
+      <label for="fFuncao">Autor/Função</label>
+      <select id="fFuncao"><option value="">Todos</option></select>
+    </div>
+    <button id="btnLimpar" class="btn">Limpar filtros</button>
+  </section>
 
-<section class="cards kpis">
-  <div class="card kpi"><div class="card-title">Total de Registros</div><div id="kpiTotal" class="card-value" data-animate>0</div></div>
-  <div class="card kpi"><div class="card-title">Campi</div><div id="kpiCampi" class="card-value" data-animate>0</div></div>
-  <div class="card kpi"><div class="card-title">Municípios</div><div id="kpiMunicipios" class="card-value" data-animate>0</div></div>
-  <div class="card kpi"><div class="card-title">Bolsistas CAR</div><div id="kpiOrientadores" class="card-value" data-animate>0</div></div>
-</section>
+  <section class="cards kpis">
+    <div class="card kpi"><div class="card-title">Total de Registros</div><div id="kpiTotal" class="card-value">0</div></div>
+    <div class="card kpi"><div class="card-title">Campi</div><div id="kpiCampi" class="card-value">0</div></div>
+    <div class="card kpi"><div class="card-title">Municípios</div><div id="kpiMunicipios" class="card-value">0</div></div>
+    <div class="card kpi"><div class="card-title">Bolsistas CAR / Autores</div><div id="kpiOrientadores" class="card-value">0</div></div>
+  </section>
 
-<section class="grid">
-  <div class="panel"><div class="panel-header"><h2>Registros por Campus</h2></div><div id="chartCampus" class="chart"></div></div>
-  <div class="panel"><div class="panel-header"><h2>Registros por Município</h2></div><div id="chartMunicipio" class="chart"></div></div>
-  <div class="panel"><div class="panel-header"><h2>Distribuição por Função</h2></div><div id="chartFuncao" class="chart"></div></div>
-</section>
+  <section class="grid two-cols">
+    <div class="panel">
+      <div class="panel-header"><h2 id="leftTitle">Registros por Campus</h2></div>
+      <div id="chartCampus" class="chart"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><h2>Registros por Município</h2></div>
+      <div id="chartMunicipio" class="chart"></div>
+    </div>
+  </section>
 
-<section class="panel wide">
-  <div class="panel-header">
-    <h2>Base completa</h2>
-    <button id="btnDownloadCSV" class="btn">Exportar CSV</button>
-  </div>
-  <table id="dataTable" class="display compact" style="width:100%"></table>
-</section>
+  <section class="panel wide">
+    <div class="panel-header">
+      <h2>Base completa</h2>
+      <button id="btnDownloadCSV" class="btn">Exportar CSV</button>
+    </div>
+    <table id="dataTable" class="display compact" style="width:100%"></table>
+  </section>
 </main>
 
 <footer class="footer">IntegraCAR Dashboard — GitHub Pages</footer>
-<script src="script.js?v=7" defer></script>
+<script src="script.js" defer></script>
 </body>
 </html>
