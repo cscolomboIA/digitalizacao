@@ -1,27 +1,23 @@
-
-// map.js — ES full fit, many centroids, no frame
+// map.js — IntegraCAR Mapa ES ajustado
 const FILE_PATH = 'data.xlsx';
 
-function normalize(x){ return (x===undefined||x===null) ? '' : String(x).trim(); }
-function groupCount(rows, fn){
-  const m = new Map(); rows.forEach(r => { const k = fn(r); if(k) m.set(k,(m.get(k)||0)+1); });
-  return Array.from(m, ([key,value])=>({key,value})).sort((a,b)=>b.value-a.value);
+// --- Funções utilitárias ---
+function normalize(x) { return (x === undefined || x === null) ? '' : String(x).trim(); }
+function groupCount(rows, fn) {
+  const m = new Map();
+  rows.forEach(r => { const k = fn(r); if (k) m.set(k, (m.get(k) || 0) + 1); });
+  return Array.from(m, ([key, value]) => ({ key, value })).sort((a, b) => b.value - a.value);
 }
-async function loadXLSX(){
+async function loadXLSX() {
   const res = await fetch(FILE_PATH);
-  if(!res.ok) throw new Error('Falha ao baixar ' + FILE_PATH);
+  if (!res.ok) throw new Error('Falha ao baixar ' + FILE_PATH);
   const buf = await res.arrayBuffer();
-  const wb = XLSX.read(buf, { type:'array' });
+  const wb = XLSX.read(buf, { type: 'array' });
   const ws = wb.Sheets[wb.SheetNames[0]];
   return XLSX.utils.sheet_to_json(ws, { defval: '' });
 }
-function pickMunicipioKey(row){
-  if (!row) return null;
-  if ('NOME MUNICÍPIO' in row) return 'NOME MUNICÍPIO';
-  if ('NOME MUNICÍPIO ' in row) return 'NOME MUNICÍPIO ';
-  if ('3) Município onde reside:' in row) return '3) Município onde reside:';
-  return null;
-}
+
+// --- Coordenadas aproximadas (centroides do ES) ---
 const ES_CENTROIDS = {
   "Afonso Cláudio": [-41.126, -20.074], "Água Doce do Norte": [-40.985, -18.548], "Águia Branca": [-40.735, -18.984],
   "Alegre": [-41.532, -20.763], "Alfredo Chaves": [-40.737, -20.639], "Alto Rio Novo": [-41.023, -19.062],
@@ -50,13 +46,54 @@ const ES_CENTROIDS = {
   "Venda Nova do Imigrante": [-41.126, -20.330], "Viana": [-40.495, -20.393], "Vila Pavão": [-40.607, -18.613],
   "Vila Valério": [-40.390, -18.993], "Vila Velha": [-40.292, -20.329], "Vitória": [-40.308, -20.315]
 };
-function computeBounds(names){
-  let minLon= 999, maxLon= -999, minLat= 999, maxLat= -999;
-  names.forEach(n=>{ const c = ES_CENTROIDS[n]; if(!c) return;
-    minLon = Math.min(minLon, c[0]); maxLon = Math.max(maxLon, c[0]);
-    minLat = Math.min(minLat, c[1]); maxLat = Math.max(maxLat, c[1]);
-  });
-  if (minLon===999) return {lon:[-41.9,-39.1], lat:[-21.4,-18.1]};
-  const padLon = 0.20, padLat = 0.25;
-  return { lon:[minLon-padLon, maxLon+padLon], lat:[maxLat+padLat, minLat-padLat] }
+
+// --- Plotagem ---
+async function main() {
+  const rows = await loadXLSX();
+  const key = Object.keys(rows[0]).find(k => k.trim().toUpperCase().includes("MUNICÍPIO"));
+  if (!key) {
+    alert("Coluna com municípios não encontrada no arquivo.");
+    return;
+  }
+
+  const grouped = groupCount(rows, r => normalize(r[key]));
+  const data = grouped.filter(g => ES_CENTROIDS[g.key]);
+
+  const lons = data.map(d => ES_CENTROIDS[d.key][0]);
+  const lats = data.map(d => ES_CENTROIDS[d.key][1]);
+  const text = data.map(d => `${d.key}: ${d.value}`);
+
+  const trace = {
+    type: 'scattergeo',
+    mode: 'markers+text',
+    lon: lons,
+    lat: lats,
+    text: text,
+    textposition: 'bottom center',
+    marker: { size: data.map(d => 6 + d.value * 2), color: '#2A61A8', opacity: 0.7 }
+  };
+
+  const layout = {
+    geo: {
+      scope: 'south america',
+      projection: { type: 'mercator' },
+      lonaxis: { range: [-41.9, -39.0] },
+      lataxis: { range: [-21.4, -18.0] },
+      showland: true,
+      landcolor: '#f5f5f5',
+      countrycolor: '#ccc',
+      showframe: false,
+      fitbounds: 'locations'
+    },
+    margin: { t: 0, b: 0, l: 0, r: 0 },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)'
+  };
+
+  Plotly.newPlot('chartMapaES', [trace], layout, { displayModeBar: false, responsive: true });
 }
+
+if (document.readyState === 'loading')
+  document.addEventListener('DOMContentLoaded', main);
+else
+  main();
