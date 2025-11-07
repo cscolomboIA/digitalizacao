@@ -220,7 +220,7 @@ async function mainMapaES() {
 
     if (!lons.length) {
       document.getElementById("chartMapaES").innerHTML =
-        "Nenhum município do ES foi reconhecido nos dados (ajustei a lógica; se persistir, veja se os nomes estão muito diferentes).";
+        "Nenhum município do ES foi reconhecido nos dados.";
       return;
     }
 
