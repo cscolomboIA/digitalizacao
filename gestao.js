@@ -2,7 +2,7 @@
 
 // URL CSV público da planilha (aba gid=0)
 const SHEET_CSV_URL =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vR1iRQWGdQsfhmHyJENgs7bDOawroShc22WuActT9UwOF5zCKE51i1tYPkrRTGFN54Ms-x9mSMa6IjO/pub?gid=0&single=true&output=csv";
+  "acompanhamento.csv";
 
 let G_ROWS = [];
 let G_COLS = {};
