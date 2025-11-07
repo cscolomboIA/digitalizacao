@@ -22,7 +22,6 @@ body{margin:0;background:var(--bg);color:var(--text)}
 .grid.two-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .panel{background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px}
 .panel-header{border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:6px;color:var(--primary)}
-.chart{height:420px}
 .footer{text-align:center;padding:18px 0 26px;font-size:12px;color:var(--muted)}
 .btn{background:var(--primary);color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer}
 .btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
@@ -39,3 +38,16 @@ select{border:1px solid var(--border);padding:8px;border-radius:8px;background:#
   .cards{grid-template-columns:repeat(2,1fr)}
   .grid.two-cols{grid-template-columns:1fr}
 }
+
+/* garante que o gráfico não passe por cima da tabela */
+.chart {
+  width: 100%;
+  max-height: 520px;   /* limite de altura */
+  overflow-y: auto;    /* se ficar grande demais, cria scroll dentro do card */
+}
+
+/* só pra garantir que cada painel respeite o fluxo normal da página */
+.panel {
+  position: relative;
+}
+
