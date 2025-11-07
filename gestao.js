@@ -1,8 +1,8 @@
-// gestao.js — Painel executivo IntegraCAR lendo direto do Google Sheets
+// gestao.js — Painel executivo IntegraCAR lendo Google Sheets
 
-// URL CSV público da planilha
+// URL CSV público da planilha (aba gid=0)
 const SHEET_CSV_URL =
-  "https://docs.google.com/spreadsheets/d/1XfQaqOV-zHA99551rNAbEAjthTA6AxRBvlSiWc8D2QE/export?format=csv&gid=0";
+  "https://docs.google.com/spreadsheets/d/1XfQaqOV-zHA99551rNAbEAjthTA6AxRBvlSiWc8D2QE/gviz/tq?tqx=out:csv&gid=0";
 
 let G_ROWS = [];
 let G_COLS = {};
@@ -36,14 +36,23 @@ function diffDays(a, b) {
 async function loadGestaoData() {
   const res = await fetch(SHEET_CSV_URL);
   if (!res.ok) {
-    throw new Error("Erro ao carregar planilha do Google Sheets: " + res.status);
+    console.error("Sheets fetch status:", res.status, res.statusText);
+    throw new Error("Falha ao acessar a planilha (status " + res.status + ").");
   }
+
   const text = await res.text();
+  if (!text || text.trim().length === 0) {
+    throw new Error("CSV retornou vazio. Confira a aba / gid da planilha.");
+  }
+
   return new Promise((resolve) => {
     Papa.parse(text, {
       header: true,
       skipEmptyLines: true,
-      complete: (result) => resolve(result.data)
+      complete: (result) => {
+        console.log("Linhas carregadas do Sheets:", result.data.length);
+        resolve(result.data);
+      }
     });
   });
 }
@@ -59,7 +68,7 @@ function detectColumns(rows) {
   const status = find(h => nrm(h).includes("status"));
   const avaliador = find(h => nrm(h).includes("aval") || nrm(h).includes("tecnico"));
   const ponto = find(h => nrm(h).includes("ponto") && nrm(h).includes("idaf"));
-  const inicio = find(h => nrm(h).includes("inicio") || nrm(h).includes("data analise"));
+  const inicio = find(h => nrm(h).includes("inicio") || nrm(h).includes("data analise") || nrm(h).includes("data abertura"));
   const ultima = find(h => nrm(h).includes("ultima") || nrm(h).includes("atualiz"));
   const meta = find(h => nrm(h).includes("meta") && (nrm(h).includes("prazo") || nrm(h).includes("sla")));
   const codigo = find(h =>
@@ -69,10 +78,11 @@ function detectColumns(rows) {
     nrm(h).includes("empreend")
   );
 
+  console.log("Colunas detectadas:", { campus, municipio, status, avaliador, ponto, inicio, ultima, meta, codigo });
   return { campus, municipio, status, avaliador, ponto, inicio, ultima, meta, codigo };
 }
 
-// Classifica status em grupos executivos
+// ---------- Classificação de status ----------
 function classStatus(raw) {
   const s = nrm(raw);
   if (!s) return "indefinido";
@@ -102,7 +112,10 @@ function applyFilters(rows) {
     const rm = municipio ? nrm(r[municipio]) : "";
     const rs = status ? nrm(r[status]) : "";
     const ra = avaliador ? nrm(r[avaliador]) : "";
-    return (!c || rc === c) && (!m || rm === m) && (!s || rs === s) && (!a || ra === a);
+    return (!c || rc === c) &&
+           (!m || rm === m) &&
+           (!s || rs === s) &&
+           (!a || ra === a);
   });
 }
 
@@ -278,7 +291,7 @@ function buildPendencias(rows) {
     if (dias == null) return;
 
     const falta = metaDias - dias;
-    if (falta <= 5) { // atrasados ou perto do prazo
+    if (falta <= 5) {
       data.push({
         campus: campus ? (r[campus] || "") : "",
         municipio: municipio ? (r[municipio] || "") : "",
@@ -353,11 +366,11 @@ async function initGestao() {
     });
 
     const lbl = document.getElementById("lblGestaoArquivo");
-    if (lbl) lbl.textContent = "Fonte: Google Sheets — IntegraCAR (atualização em tempo quase real)";
+    if (lbl) lbl.textContent = "Fonte: Google Sheets — IntegraCAR";
 
     refreshGestao();
   } catch (e) {
-    console.error(e);
+    console.error("Erro Painel Gestão:", e);
     alert("Erro ao carregar o Painel de Gestão. Verifique o compartilhamento da planilha e a URL.");
   }
 }
