@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <title>IntegraCAR · Painel de Gestão</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+  <!-- Ícone e tema IntegraCAR -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="stylesheet" href="style.css"/>
+
+  <!-- DataTables (para tabela de pendências, se quiser) -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Plotly para gráficos -->
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+
+  <!-- jQuery + DataTables -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+  <!-- PapaParse para ler CSV -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    /* ajustes específicos do painel gestor, usa mesma paleta */
+    .gestao-header h1 {
+      font-size: 22px;
+      margin: 0;
+      color: var(--primary);
+    }
+    .gestao-subtitle {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .kpis-gestao {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin: 14px 0 4px;
+    }
+    .kpi-gestao .card-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: .06em;
+    }
+    .kpi-gestao .card-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .filters-gestao {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+      margin-top: 6px;
+    }
+    .filters-gestao .filter-group {
+      min-width: 160px;
+    }
+    .grid-gestao {
+      display: grid;
+      grid-template-columns: 2fr 2fr 2fr;
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .grid-gestao .panel {
+      min-height: 280px;
+    }
+    .chart-small {
+      width: 100%;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .pendencias-panel .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .pendencias-panel table {
+      font-size: 11px;
+    }
+    @media (max-width: 1100px) {
+      .kpis-gestao { grid-template-columns: repeat(3, 1fr); }
+      .grid-gestao { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand compact-header">
+    <img class="logo" src="logo.png" alt="IntegraCAR">
+    <div class="brand-text gestao-header">
+      <h1>IntegraCAR · Painel de Gestão de Processos</h1>
+      <div class="gestao-subtitle">
+        Acompanhamento executivo dos processos IntegraCAR (status, prazos, pendências).
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav class="topnav">
+  <a href="index.html">Dashboard CAR</a>
+  <a href="map.html">Mapa ES</a>
+  <a href="gestao.html" class="active">Painel de Gestão</a>
+</nav>
+
+<main class="container">
+
+  <!-- Filtros executivos -->
+  <section class="card">
+    <div class="filters-gestao">
+      <div class="filter-group">
+        <label for="fGestaoCampus">Campus</label>
+        <select id="fGestaoCampus">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="fGestaoMunicipio">Município</label>
+        <select id="fGestaoMunicipio">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="fGestaoStatus">Status</label>
+        <select id="fGestaoStatus">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="fGestaoAvaliador">Avaliador</label>
+        <select id="fGestaoAvaliador">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <button id="btnGestaoLimpar" class="btn">Limpar filtros</button>
+    </div>
+  </section>
+
+  <!-- KPIs principais -->
+  <section class="kpis-gestao">
+    <div class="card kpi-gestao">
+      <div class="card-title">Total de processos</div>
+      <div id="kpiGTotal" class="card-value">0</div>
+    </div>
+    <div class="card kpi-gestao">
+      <div class="card-title">Concluídos</div>
+      <div id="kpiGConcluidos" class="card-value">0</div>
+    </div>
+    <div class="card kpi-gestao">
+      <div class="card-title">Em análise</div>
+      <div id="kpiGEmAnalise" class="card-value">0</div>
+    </div>
+    <div class="card kpi-gestao">
+      <div class="card-title">Pendentes / Não iniciados</div>
+      <div id="kpiGPendentes" class="card-value">0</div>
+    </div>
+    <div class="card kpi-gestao">
+      <div class="card-title">% dentro do prazo (SLA)</div>
+      <div id="kpiGSLA" class="card-value">–</div>
+    </div>
+  </section>
+
+  <!-- Três blocos principais -->
+  <section class="grid-gestao">
+
+    <!-- Pipeline por Status -->
+    <div class="panel">
+      <div class="panel-header"><h2>Pipeline por Status</h2></div>
+      <div id="chartGStatus" class="chart-small"></div>
+    </div>
+
+    <!-- Processos por Campus (stacked status) -->
+    <div class="panel">
+      <div class="panel-header"><h2>Processos por Campus</h2></div>
+      <div id="chartGCampus" class="chart-small"></div>
+    </div>
+
+    <!-- Processos por Município -->
+    <div class="panel">
+      <div class="panel-header"><h2>Processos por Município</h2></div>
+      <div id="chartGMunicipio" class="chart-small"></div>
+    </div>
+  </section>
+
+  <!-- Desempenho por Avaliador -->
+  <section class="panel">
+    <div class="panel-header"><h2>Desempenho por Avaliador (top 10)</h2></div>
+    <div id="chartGAvaliador" class="chart-small"></div>
+  </section>
+
+  <!-- Pendências e Riscos -->
+  <section class="panel pendencias-panel">
+    <div class="panel-header">
+      <h2>Pendências Críticas (atrasados e próximos do prazo)</h2>
+      <span class="meta" id="lblGestaoArquivo"></span>
+    </div>
+    <div class="panel-body">
+      <table id="tblPendencias" class="display compact" style="width:100%">
+        <thead>
+          <tr>
+            <th>Campus</th>
+            <th>Município</th>
+            <th>Status</th>
+            <th>Dias no fluxo</th>
+            <th>Meta (dias)</th>
+            <th>Avaliador</th>
+            <th>Código / Processo</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  IntegraCAR · Painel de Gestão — GitHub Pages
+</footer>
+
+<script src="gestao.js"></script>
+</body>
+</html>
