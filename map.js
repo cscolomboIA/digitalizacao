@@ -1,397 +1,12 @@
-// map.js — IntegraCAR · Mapa ES com reconhecimento inteligente de municípios
+// map.js — IntegraCAR · Mapa ES usando acompanhamento.csv
 
-const FILE_PATH = "data.xlsx";
+// Arquivo de origem (na mesma pasta do map.html)
+const FILE_PATH = "acompanhamento.csv";
 
 // ---------------- Utilidades ----------------
 
 function normalizeName(str) {
-  return (str || "")// gestao.js — Painel executivo IntegraCAR lendo Google Sheets (com debug)
-
-// URL CSV público da planilha (aba correta gid=0)
-const SHEET_CSV_URL =
-  "https://docs.google.com/spreadsheets/d/1XfQaqOV-zHA99551rNAbEAjthTA6AxRBvlSiWc8D2QE/gviz/tq?tqx=out:csv&gid=0";
-
-let G_ROWS = [];
-let G_COLS = {};
-let pendenciasTable = null;
-
-// ---------- Utilidades ----------
-function nrm(str) {
   return (str || "")
-    .toString()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-}
-
-function parseDate(v) {
-  if (!v) return null;
-  if (v instanceof Date && !isNaN(v)) return v;
-  const s = String(v).replace(/(\d{2})\/(\d{2})\/(\d{4})/, "$3-$2-$1"); // dd/mm/aaaa
-  const d = new Date(s);
-  return isNaN(d) ? null : d;
-}
-
-function diffDays(a, b) {
-  if (!a || !b) return null;
-  return Math.floor((b - a) / (1000 * 60 * 60 * 24));
-}
-
-// ---------- Leitura da planilha ----------
-async function loadGestaoData() {
-  console.log("Buscando dados em:", SHEET_CSV_URL);
-  const res = await fetch(SHEET_CSV_URL);
-
-  console.log("Status fetch Sheets:", res.status, res.statusText);
-
-  if (!res.ok) {
-    throw new Error("Falha ao acessar a planilha (status " + res.status + ").");
-  }
-
-  const text = await res.text();
-  if (!text || text.trim().length === 0) {
-    throw new Error("CSV retornou vazio. Confira se a aba (gid=0) tem dados.");
-  }
-
-  return new Promise((resolve) => {
-    Papa.parse(text, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (result) => {
-        console.log("Linhas carregadas do Sheets:", result.data.length);
-        resolve(result.data);
-      }
-    });
-  });
-}
-
-// ---------- Detecção de colunas ----------
-function detectColumns(rows) {
-  const sample = rows[0] || {};
-  const headers = Object.keys(sample);
-  const find = (fn) => headers.find(fn);
-
-  const campus = find(h => nrm(h).includes("campus"));
-  const municipio = find(h => nrm(h).includes("munic"));
-  const status = find(h => nrm(h).includes("status"));
-  const avaliador = find(h => nrm(h).includes("aval") || nrm(h).includes("tecnico"));
-  const ponto = find(h => nrm(h).includes("ponto") && nrm(h).includes("idaf"));
-  const inicio = find(h => nrm(h).includes("inicio") || nrm(h).includes("data analise") || nrm(h).includes("data abertura"));
-  const ultima = find(h => nrm(h).includes("ultima") || nrm(h).includes("atualiz"));
-  const meta = find(h => nrm(h).includes("meta") && (nrm(h).includes("prazo") || nrm(h).includes("sla")));
-  const codigo = find(h =>
-    nrm(h).includes("processo") ||
-    nrm(h).includes("edocs") ||
-    nrm(h).includes("e-doc") ||
-    nrm(h).includes("empreend")
-  );
-
-  console.log("Colunas detectadas:", { campus, municipio, status, avaliador, ponto, inicio, ultima, meta, codigo });
-  return { campus, municipio, status, avaliador, ponto, inicio, ultima, meta, codigo };
-}
-
-// ---------- Classificação de status ----------
-function classStatus(raw) {
-  const s = nrm(raw);
-  if (!s) return "indefinido";
-  if (s.includes("aprov") || s.includes("defer") || s.includes("emitido")) return "concluido";
-  if (s.includes("reprov") || s.includes("indefer") || s.includes("cancel")) return "concluido";
-  if (s.includes("analise") || s.includes("andamento")) return "em_analise";
-  if (s.includes("pendente") || s.includes("aguard") || s.includes("nao iniciado") || s.includes("notificacao"))
-    return "pendente";
-  return "outros";
-}
-
-// ---------- Filtros ----------
-function getFilter(id) {
-  const el = document.getElementById(id);
-  return el ? nrm(el.value) : "";
-}
-
-function applyFilters(rows) {
-  const c = getFilter("fGestaoCampus");
-  const m = getFilter("fGestaoMunicipio");
-  const s = getFilter("fGestaoStatus");
-  const a = getFilter("fGestaoAvaliador");
-  const { campus, municipio, status, avaliador } = G_COLS;
-
-  return rows.filter(r => {
-    const rc = campus ? nrm(r[campus]) : "";
-    const rm = municipio ? nrm(r[municipio]) : "";
-    const rs = status ? nrm(r[status]) : "";
-    const ra = avaliador ? nrm(r[avaliador]) : "";
-    return (!c || rc === c) &&
-           (!m || rm === m) &&
-           (!s || rs === s) &&
-           (!a || ra === a);
-  });
-}
-
-function fillSelect(id, values, labelAll) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const uniq = Array.from(new Set(values.filter(Boolean))).sort();
-  el.innerHTML = `<option value="">${labelAll}</option>` +
-    uniq.map(v => `<option value="${v}">${v}</option>`).join("");
-}
-
-// ---------- KPIs ----------
-function updateKPIs(rows) {
-  const { status, inicio, ultima, meta } = G_COLS;
-  const total = rows.length;
-  let concluidos = 0, emAnalise = 0, pendentes = 0;
-  let inSLA = 0, outSLA = 0;
-
-  rows.forEach(r => {
-    const cls = classStatus(status ? r[status] : "");
-    if (cls === "concluido") concluidos++;
-    else if (cls === "em_analise") emAnalise++;
-    else if (cls === "pendente") pendentes++;
-
-    const start = inicio ? parseDate(r[inicio]) : null;
-    const last = ultima ? parseDate(r[ultima]) : null;
-    const metaDias = meta ? parseInt(r[meta]) || null : null;
-    if (!start || !metaDias) return;
-
-    const ref = last || new Date();
-    const dias = diffDays(start, ref);
-    if (dias == null) return;
-
-    if (dias <= metaDias) inSLA++;
-    else outSLA++;
-  });
-
-  const sla = (inSLA + outSLA) ? Math.round(inSLA * 100 / (inSLA + outSLA)) : null;
-
-  document.getElementById("kpiGTotal").textContent = total;
-  document.getElementById("kpiGConcluidos").textContent = concluidos;
-  document.getElementById("kpiGEmAnalise").textContent = emAnalise;
-  document.getElementById("kpiGPendentes").textContent = pendentes;
-  document.getElementById("kpiGSLA").textContent = sla == null ? "–" : sla + "%";
-}
-
-// ---------- Gráficos ----------
-function plotStatus(rows) {
-  const { status } = G_COLS;
-  const map = {};
-  rows.forEach(r => {
-    const rot = status ? (r[status] || "Sem status") : "Sem status";
-    map[rot] = (map[rot] || 0) + 1;
-  });
-  const labels = Object.keys(map);
-  const values = labels.map(k => map[k]);
-
-  Plotly.newPlot("chartGStatus", [{
-    x: values,
-    y: labels,
-    type: "bar",
-    orientation: "h",
-    hovertemplate: "%{y}: %{x}<extra></extra>"
-  }], {
-    margin: { t: 10, l: 160, r: 10, b: 30 },
-    paper_bgcolor: "rgba(0,0,0,0)",
-    plot_bgcolor: "rgba(0,0,0,0)"
-  }, { displayModeBar:false, responsive:true });
-}
-
-function plotPorCampus(rows) {
-  const { campus, status } = G_COLS;
-  if (!campus) {
-    document.getElementById("chartGCampus").innerHTML = "Coluna de Campus não encontrada.";
-    return;
-  }
-  const mapa = {};
-  rows.forEach(r => {
-    const c = (r[campus] || "Sem campus").toString();
-    const cls = classStatus(status ? r[status] : "");
-    mapa[c] = mapa[c] || { concluidos:0, em_analise:0, pendentes:0 };
-    if (cls === "concluido") mapa[c].concluidos++;
-    else if (cls === "em_analise") mapa[c].em_analise++;
-    else if (cls === "pendente") mapa[c].pendentes++;
-  });
-
-  const campi = Object.keys(mapa);
-  const mk = k => campi.map(c => mapa[c][k]);
-
-  const data = [
-    { name:"Concluídos", x: mk("concluidos"), y: campi, type:"bar", orientation:"h" },
-    { name:"Em análise", x: mk("em_analise"), y: campi, type:"bar", orientation:"h" },
-    { name:"Pendentes", x: mk("pendentes"), y: campi, type:"bar", orientation:"h" }
-  ];
-
-  Plotly.newPlot("chartGCampus", data, {
-    barmode:"stack",
-    margin:{t:10,l:160,r:10,b:30},
-    legend:{orientation:"h",y:-0.2},
-    paper_bgcolor:"rgba(0,0,0,0)",
-    plot_bgcolor:"rgba(0,0,0,0)"
-  }, {displayModeBar:false,responsive:true});
-}
-
-function plotPorMunicipio(rows) {
-  const { municipio } = G_COLS;
-  if (!municipio) {
-    document.getElementById("chartGMunicipio").innerHTML = "Coluna de Município não encontrada.";
-    return;
-  }
-  const map = {};
-  rows.forEach(r => {
-    const m = (r[municipio] || "Sem município").toString();
-    map[m] = (map[m] || 0) + 1;
-  });
-  const labels = Object.keys(map);
-  const values = labels.map(k => map[k]);
-
-  Plotly.newPlot("chartGMunicipio", [{
-    x: values,
-    y: labels,
-    type:"bar",
-    orientation:"h",
-    hovertemplate:"%{y}: %{x}<extra></extra>"
-  }],{
-    margin:{t:10,l:180,r:10,b:30},
-    paper_bgcolor:"rgba(0,0,0,0)",
-    plot_bgcolor:"rgba(0,0,0,0)"
-  },{displayModeBar:false,responsive:true});
-}
-
-function plotAvaliador(rows) {
-  const { avaliador } = G_COLS;
-  if (!avaliador) {
-    document.getElementById("chartGAvaliador").innerHTML = "Coluna de Avaliador não encontrada.";
-    return;
-  }
-  const map = {};
-  rows.forEach(r => {
-    const a = (r[avaliador] || "Sem avaliador").toString();
-    map[a] = (map[a] || 0) + 1;
-  });
-  const arr = Object.entries(map).map(([k,v])=>({k,v})).sort((a,b)=>b.v-a.v).slice(0,10);
-  const labels = arr.map(x=>x.k);
-  const values = arr.map(x=>x.v);
-
-  Plotly.newPlot("chartGAvaliador",[{
-    x: values,
-    y: labels,
-    type:"bar",
-    orientation:"h",
-    hovertemplate:"%{y}: %{x}<extra></extra>"
-  }],{
-    margin:{t:10,l:200,r:10,b:30},
-    paper_bgcolor:"rgba(0,0,0,0)",
-    plot_bgcolor:"rgba(0,0,0,0)"
-  },{displayModeBar:false,responsive:true});
-}
-
-// ---------- Pendências ----------
-function buildPendencias(rows) {
-  const { campus, municipio, status, inicio, ultima, meta, avaliador, codigo } = G_COLS;
-  const data = [];
-
-  rows.forEach(r => {
-    const start = inicio ? parseDate(r[inicio]) : null;
-    const last = ultima ? parseDate(r[ultima]) : null;
-    const metaDias = meta ? parseInt(r[meta]) || null : null;
-    if (!start || !metaDias) return;
-
-    const ref = last || new Date();
-    const dias = diffDays(start, ref);
-    if (dias == null) return;
-
-    const falta = metaDias - dias;
-    if (falta <= 5) {
-      data.push({
-        campus: campus ? (r[campus] || "") : "",
-        municipio: municipio ? (r[municipio] || "") : "",
-        status: status ? (r[status] || "") : "",
-        dias,
-        meta: metaDias,
-        avaliador: avaliador ? (r[avaliador] || "") : "",
-        codigo: codigo ? (r[codigo] || "") : ""
-      });
-    }
-  });
-
-  if (pendenciasTable) {
-    pendenciasTable.clear().rows.add(data).draw();
-    return;
-  }
-
-  pendenciasTable = $("#tblPendencias").DataTable({
-    data,
-    columns: [
-      { data:"campus" },
-      { data:"municipio" },
-      { data:"status" },
-      { data:"dias" },
-      { data:"meta" },
-      { data:"avaliador" },
-      { data:"codigo" }
-    ],
-    pageLength: 10,
-    order: [[3,"desc"]],
-    language: {
-      url: "https://cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json"
-    }
-  });
-}
-
-// ---------- Orquestração ----------
-function refreshGestao() {
-  const filtered = applyFilters(G_ROWS);
-  updateKPIs(filtered);
-  plotStatus(filtered);
-  plotPorCampus(filtered);
-  plotPorMunicipio(filtered);
-  plotAvaliador(filtered);
-  buildPendencias(filtered);
-}
-
-async function initGestao() {
-  try {
-    G_ROWS = await loadGestaoData();
-    if (!G_ROWS.length) throw new Error("Planilha vazia.");
-
-    G_COLS = detectColumns(G_ROWS);
-
-    const { campus, municipio, status, avaliador } = G_COLS;
-    fillSelect("fGestaoCampus", G_ROWS.map(r => r[campus]), "Todos");
-    fillSelect("fGestaoMunicipio", G_ROWS.map(r => r[municipio]), "Todos");
-    fillSelect("fGestaoStatus", G_ROWS.map(r => r[status]), "Todos");
-    fillSelect("fGestaoAvaliador", G_ROWS.map(r => r[avaliador]), "Todos");
-
-    const lbl = document.getElementById("lblGestaoArquivo");
-    if (lbl) lbl.textContent = "Fonte: Google Sheets — IntegraCAR";
-
-    // listeners
-    document.getElementById("btnGestaoLimpar").addEventListener("click", () => {
-      ["fGestaoCampus","fGestaoMunicipio","fGestaoStatus","fGestaoAvaliador"].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = "";
-      });
-      refreshGestao();
-    });
-
-    ["fGestaoCampus","fGestaoMunicipio","fGestaoStatus","fGestaoAvaliador"].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener("change", refreshGestao);
-    });
-
-    refreshGestao();
-  } catch (e) {
-    console.error("Erro Painel Gestão:", e);
-    alert("Erro ao carregar o Painel de Gestão: " + e.message);
-  }
-}
-
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initGestao);
-} else {
-  initGestao();
-}
-
     .toString()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") // tira acentos
@@ -400,7 +15,7 @@ if (document.readyState === "loading") {
     .toLowerCase();
 }
 
-// remove sufixos tipo " - ES", "/ES", "(ES)"
+// remove sufixos tipo " - ES", "/ES", "(ES)", ", ES"
 function stripEsSuffix(name) {
   return name
     .replace(/[-/]\s*es$/i, "")
@@ -492,13 +107,12 @@ const ES_CENTROIDS = {
   "vitoria": [-40.308, -20.315]
 };
 
-// sinônimos / abreviações comuns -> chave do ES_CENTROIDS
+// sinônimos / abreviações comuns -> chave de ES_CENTROIDS
 const SYNONYMS = {
   "cachoeiro": "cachoeiro de itapemirim",
   "cachoeiro itapemirim": "cachoeiro de itapemirim",
   "cachoeiro de itapemirim es": "cachoeiro de itapemirim",
   "sao mateus es": "sao mateus",
-  "sao mateus-do-sul": "sao mateus", // só pra garantir se vier zoado
   "vila velha es": "vila velha",
   "guarapari es": "guarapari",
   "linhares es": "linhares",
@@ -510,7 +124,7 @@ const SYNONYMS = {
   "nova venecia es": "nova venecia"
 };
 
-// tenta mapear o nome lido para uma chave válida do ES_CENTROIDS
+// tenta mapear o nome lido para uma chave válida
 function mapMunicipioToES(name) {
   if (!name) return null;
 
@@ -527,86 +141,98 @@ function mapMunicipioToES(name) {
     return SYNONYMS[norm];
   }
 
-  // 3) tentar "começa com" (ex: "cachoeiro" -> "cachoeiro de itapemirim")
-  const direct = Object.keys(ES_CENTROIDS).filter(k =>
+  // 3) começa com / termina com
+  const starters = Object.keys(ES_CENTROIDS).filter(k =>
     k.startsWith(norm) || norm.startsWith(k)
   );
-  if (direct.length === 1) return direct[0];
+  if (starters.length === 1) return starters[0];
 
-  // 4) tentar "contém" de forma segura
+  // 4) contém (caso único)
   const contains = Object.keys(ES_CENTROIDS).filter(k =>
     k.includes(norm) || norm.includes(k)
   );
   if (contains.length === 1) return contains[0];
 
-  // sem match confiável
   return null;
 }
 
-// ---------------- Leitura XLSX ----------------
+// ---------------- Leitura do CSV ----------------
 
-async function loadXlsxRows() {
+// usa XLSX para ler CSV também (sem precisar de biblioteca extra)
+async function loadRowsFromCsv() {
+  console.log("Carregando dados do mapa a partir de", FILE_PATH);
   const res = await fetch(FILE_PATH);
   if (!res.ok) {
-    console.error("Erro ao baixar", FILE_PATH, res.status);
-    throw new Error("Não foi possível carregar o arquivo de dados do mapa.");
+    console.error("Erro ao baixar", FILE_PATH, res.status, res.statusText);
+    throw new Error("Não foi possível carregar " + FILE_PATH);
   }
-  const buf = await res.arrayBuffer();
-  const wb = XLSX.read(buf, { type: "array" });
+
+  const text = await res.text();
+  if (!text || !text.trim()) {
+    throw new Error("Arquivo " + FILE_PATH + " está vazio.");
+  }
+
+  // XLSX lê CSV como string
+  const wb = XLSX.read(text, { type: "string" });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(ws, { defval: "" });
+  const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+
+  console.log("Linhas lidas para o mapa:", rows.length);
+  return rows;
 }
 
-// Detecta coluna de município (qualquer coisa com "munic" no nome)
+// Detecta coluna de município (qualquer coisa com "munic")
 function detectMunicipioColumn(headers) {
-  return headers.find(h => normalizeName(h).includes("munic")) || null;
+  const col = headers.find(h => normalizeName(h).includes("munic")) || null;
+  console.log("Coluna de município detectada:", col);
+  return col;
 }
 
 // ---------------- Plotagem ----------------
 
 async function mainMapaES() {
   try {
-    const rows = await loadXlsxRows();
+    const rows = await loadRowsFromCsv();
     if (!rows.length) {
-      document.getElementById("chartMapaES").innerHTML = "Sem dados para exibir.";
+      document.getElementById("chartMapaES").innerText = "Sem dados para exibir.";
       return;
     }
 
     const headers = Object.keys(rows[0]);
     const munCol = detectMunicipioColumn(headers);
     if (!munCol) {
-      document.getElementById("chartMapaES").innerHTML =
-        "Coluna de município não encontrada no arquivo.";
+      document.getElementById("chartMapaES").innerText =
+        "Coluna de município não encontrada no arquivo (esperado algo com 'Município').";
       return;
     }
 
-    // contagem por município mapeado
     const counts = {};
     rows.forEach(r => {
-      const original = r[munCol];
-      const key = mapMunicipioToES(original);
+      const raw = r[munCol];
+      const key = mapMunicipioToES(raw);
       if (!key) return;
       counts[key] = (counts[key] || 0) + 1;
     });
+
+    console.log("Municipios ES reconhecidos no mapa:", counts);
 
     const lons = [];
     const lats = [];
     const texts = [];
     const sizes = [];
 
-    Object.entries(counts).forEach(([key, value]) => {
+    Object.entries(counts).forEach(([key, qtd]) => {
       const coord = ES_CENTROIDS[key];
       if (!coord) return;
       lons.push(coord[0]);
       lats.push(coord[1]);
-      const label = key.toUpperCase();
-      texts.push(`${label}: ${value}`);
-      sizes.push(8 + Math.min(30, value * 3));
+      texts.push(`${key.toUpperCase()}: ${qtd}`);
+      sizes.push(8 + Math.min(30, qtd * 3));
     });
 
     if (!lons.length) {
-      document.getElementById("chartMapaES").innerHTML =
-        "Nenhum município do ES foi reconhecido nos dados.";
+      document.getElementById("chartMapaES").innerText =
+        "Nenhum município do ES foi reconhecido nos dados. Veja no console os nomes lidos para ajustar (F12 → Console).";
       return;
     }
 
@@ -647,9 +273,9 @@ async function mainMapaES() {
     });
 
   } catch (err) {
-    console.error(err);
-    document.getElementById("chartMapaES").innerHTML =
-      "Erro ao carregar o mapa. Verifique se o arquivo data.xlsx está na mesma pasta.";
+    console.error("Erro no mapa ES:", err);
+    document.getElementById("chartMapaES").innerText =
+      "Erro ao carregar o mapa. Verifique se o arquivo acompanhamento.csv está na mesma pasta do map.html.";
   }
 }
 
