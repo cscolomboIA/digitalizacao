@@ -24,7 +24,6 @@ Data e Hora do início da análise,Campus,Nome completo do avaliador do processo
 03/11/2025,Vitória,Natasha Telles Storni,Laisa Carulina,2025-XKV0D,26554/2014,33639,Atílio Vivácqua,06/11/2025,Reprovado – notificação ao proprietário/possuidor realizada,Falta de documentação,
 04/11/2025,Idaf,Vitoria Evangelista dos Santos,Ivan Oliveira Lima,2025-6H28G,22515/2019,607647,Atílio Vivácqua,,Reprovado – notificação ao proprietário/possuidor realizada,,
 06/11/2015,santa Teresa,Graciany Tononi Sarmento,Graciany Tononi Sarmento ,2025-BBTLF,19508/2017,548071,Atílio Vivácqua,06/11/2025,Reprovado – notificação ao proprietário/possuidor pendente,Processo já possui ofício de pendência não atendido,06/11/2025 14:18:00
-04/11/2025,Vitória,Natasha Telles Storni,Schirley Holz,2025-XKV0D,26554/2014,336339,Atílio Vivácqua,06/11/2025,Reprovado – notificação ao proprietário/possuidor realizada,,00/00/2025 00:00:00
 03/11/2025,Cachoeiro de Itapemirim,Patrícia Borges Dias,Patrícia Borges Dias,2025-767GV,4876/2020,610344,Atílio Vivácqua,,Reprovado – notificação ao proprietário/possuidor realizada,"Imóvel receptor de ARL, onde um dos imóveis cedentes não possui CAR emitido por conta da ausência da certidão de habilitação para fins de compensação de reserva legal emitida pelo orgão gestor da Unidade de conservação em questão.",
 31/10/2025,Colatina,Abrahão Alexandre Alden Elesbon,Alysson Roberto de Almeida,2025-BH6LK,5451/2019,603440,Atílio Vivácqua,07/11/2025,Reprovado – notificação ao proprietário/possuidor pendente,Sobreposição,
 02/11/2025,Colatina,Mateus Zimmer Dietrich,Alysson Roberto de Almeida,2025-NX942,22044/2023,629622,Atílio Vivácqua,07/11/2025,"Aprovado – título emitido, mas não entregue",,
@@ -113,7 +112,7 @@ Data e Hora do início da análise,Campus,Nome completo do avaliador do processo
 04/11/2025,Itapina,Gabriel Fornaciari,Ranielle Kamke Krauzer,2025-2L6MW,14703/2025,637669,Pedro Canário,,Reprovado – notificação ao proprietário/possuidor realizada,Sobreposição,
 04/11/2025,Itapina,Gabriel Fornaciari,Ranielle Kamke Krauzer,2025-M25XG,16750/2022,623018,Pedro Canário,,Reprovado – notificação ao proprietário/possuidor pendente,"No processo já existe OP pendente de entrega, com pendências ainda necessárias de serem atendidas.",
 04/11/2025,Itapina,Robson Prucoli Posse,Ranielle Kamke Krauzer,2025-8Q8ZJ,38093/2016,120185,Pedro Canário,,Aprovado – sem título emitido,,
-31/11/2025,Itapina,Robson Prucoli Posse,Ranielle Kamke Krauzer,2025-9S2S8,9873/2021,616336,Pedro Canário,,Aprovado – sem título emitido,,
+04/11/2025,Itapina,Robson Prucoli Posse,Ranielle Kamke Krauzer,2025-9S2S8,9873/2021,616336,Pedro Canário,,Aprovado – sem título emitido,,
 04/11/2025 13:00,Montanha,Filipe Hubner,Paulo Vinicius Alves Peruchi,2024-C2MQ5,9319/2015,39992,Pedro Canário,06/11/2025,Reprovado – notificação ao proprietário/possuidor realizada,Pendência de ART e assinatura do requerimento.,
 5/11/2025 16:00:00,Santa Teresa,Ednaldo Miranda de Oliveira,Graciany Tononi Sarmento ,2025-FHCB9,18311/2013,9077,Pedro Canário,06/11/2025,"Aprovado – título emitido, mas não entregue",,05/11/2025 17:00:00
 04/11/2025 10:00,Santa Teresa,Hediberto Nei Matiello,Graciany Tononi Sarmento ,2025-68H41,18138/2013,1635,Pedro Canário,05/11/2025,"Aprovado – título emitido, mas não entregue",,05/11/2025 12:00:00
@@ -194,7 +193,7 @@ Data e Hora do início da análise,Campus,Nome completo do avaliador do processo
 04/11/2025,Ibatiba,Arnaldo Henrique de Oliveira Carvalho,Rodolfo Catein Lugon-Moulin Alves,2025-FSP4V,9732/2025,635966,,04/11/2025,Aprovado – título emitido e entregue,,
 04/11/2025,Ibatiba,Arnaldo Henrique de Oliveira Carvalho,Rodolfo Catein Lugon-Moulin Alves,2025-PL2XG,35409/2015,59424,,04/11/2025,Reprovado – notificação ao proprietário/possuidor realizada,,
 29/08/2025 12:30:00,Itapina,Gabriel Fornaciari,Ranielle Kramke Kauzer,2025-CZ71F,4793/2021,615449,,02/10/2025,Aprovado – título emitido e entregue,,00/00/2025 00:00:00
-27/10/2025,Itapina,Ranielle Kamke Krauzer,Ranielle Kamke Krauzer,2025-9F2K6,15738/2025,637919,,,Análise não iniciada,Desmate,
+27/10/2025,Itapina,Ranielle Kamke Krauzer,Ranielle Kamke Krauzer,2025-9F2K6,15738/2025,637919,,,Reprovado – já encaminhado para vistoria,Desmate,
 29/08/2025 12:30:00,Itapina,Robson Prucoli Posse,Ranielle Kramke Kauzer,2025-F4NFB,5808/2022,1445,,02/10/2025,Aprovado – título emitido e entregue,,00/00/2025 00:00:00
 01/10/2025 00:00:00,Linhares,Renata Guidini Chagas Falsoni ,Renata Guidini Chagas Falsoni,2025-J3JQW ,4788/2025,636023,,02/10/2025,Aprovado – título emitido e entregue,,00/00/2025 00:00:00
 24/09/2025 00:00:00,Linhares,Renata Guidini Chagas Falsoni ,Renata Guidini Chagas Falsoni,2025-16X79,16053/2025,69501,,23/09 /2025,"Aprovado – título emitido, mas não entregue",,00/00/2025 00:00:00
@@ -260,3 +259,7 @@ Data e Hora do início da análise,Campus,Nome completo do avaliador do processo
 00/00/2025,Vitória,Marília Sanglard Almeida,Schirley Holz,2025-L094Q7,40520/2015,62509,,02/10/2025,"Aprovado – título emitido, mas não entregue",,00/00/2025 00:00:00
 00/00/2025 00:00:00,Vitória,Natasha Telles Storni,Schirley Holz,2025-C8FQ1,9005/2022,621565,,02/10/2025,Análise iniciada – ainda sem parecer,,00/00/2025 00:00:00
 ,,,Tiago Frigério Gomes,2025-ZXVH6,13633/2015,42903,,31/10/2025,Análise não iniciada,,
+,Vitória,Laisa Carulina Donato da Vitória ,Laisa Carulina Donato da Vitória ,2025-H1BWD,12392/2024,632922,,,"Aprovado – título emitido, mas não entregue",,
+07/11/2025,Vitória ,Carina Valois,Carina Kelly Valois Borges Ramos,2025-PBVP4,9262_2020,42178,Atílio Vivácqua,,Aprovado – sem título emitido,"Imóvel original que gerou desmembramentos, emp. 610875 pendente, enviada nova solicitação com croqui corrigido apresentado pelo prop. resultado em 2 CARs aprovados",
+07/11/2025,Vitória ,Carina Valois,Carina Kelly Valois Borges Ramos,2025-F8VR4,15274/2024,633610,Atílio Vivácqua,,Reprovado – notificação ao proprietário/possuidor realizada,"Pertence a 1 herdeiro, CAR ENCERRADO, Sobrepondo com imóvel original 81273, já dividido em 3 glebas na escritura, porém CAR 81273 não retificado",
+30/10/2025,Vitória ,Carina Valois,Carina Kelly Valois Borges Ramos,2025-KJV1T,23496_2015,51178,Afonso Cláudio,,Reprovado – notificação ao proprietário/possuidor pendente,"Atualizado CCIR, escritura atualizada sem alterações, solicitar croqui com memorial descritivo, para retfiicar projeto geográfico (somente ATP)",
