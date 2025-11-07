@@ -42,8 +42,7 @@ function groupCount(rows, keySelector){
 function plotBarLeft(divId, labels, values, title){
   const div = el(divId); if(!div) return;
   const maxLen = Math.max(0, ...labels.map(l => String(l||'').length));
-  //const h = Math.max(320, Math.min(1600, 26*labels.length + 80));
-  const h = Math.min(800, 22 * labels.length + 100);
+  const h = Math.max(320, Math.min(520, 22 * labels.length + 80));
 
   Plotly.newPlot(div, [{
     y: labels, x: values, type:'bar', orientation:'h',
