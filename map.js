@@ -1,23 +1,24 @@
-// map.js — IntegraCAR Mapa ES ajustado
+// map.js — versão robusta com normalização de nomes
 const FILE_PATH = 'data.xlsx';
 
-// --- Funções utilitárias ---
-function normalize(x) { return (x === undefined || x === null) ? '' : String(x).trim(); }
-function groupCount(rows, fn) {
-  const m = new Map();
-  rows.forEach(r => { const k = fn(r); if (k) m.set(k, (m.get(k) || 0) + 1); });
-  return Array.from(m, ([key, value]) => ({ key, value })).sort((a, b) => b.value - a.value);
+function normalize(x) {
+  return (x || '')
+    .normalize('NFD')                 // remove acentos
+    .replace(/[\u0300-\u036f]/g, '')  // remove diacríticos
+    .replace(/\s+/g, ' ')             // normaliza espaços
+    .trim()
+    .toLowerCase();
 }
+
 async function loadXLSX() {
   const res = await fetch(FILE_PATH);
-  if (!res.ok) throw new Error('Falha ao baixar ' + FILE_PATH);
   const buf = await res.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array' });
   const ws = wb.Sheets[wb.SheetNames[0]];
   return XLSX.utils.sheet_to_json(ws, { defval: '' });
 }
 
-// --- Coordenadas aproximadas (centroides do ES) ---
+// Coordenadas dos municípios do ES
 const ES_CENTROIDS = {
   "Afonso Cláudio": [-41.126, -20.074], "Água Doce do Norte": [-40.985, -18.548], "Águia Branca": [-40.735, -18.984],
   "Alegre": [-41.532, -20.763], "Alfredo Chaves": [-40.737, -20.639], "Alto Rio Novo": [-41.023, -19.062],
@@ -47,43 +48,52 @@ const ES_CENTROIDS = {
   "Vila Valério": [-40.390, -18.993], "Vila Velha": [-40.292, -20.329], "Vitória": [-40.308, -20.315]
 };
 
-// --- Plotagem ---
+// Normaliza dicionário
+const normalizedCentroids = Object.fromEntries(
+  Object.entries(ES_CENTROIDS).map(([k, v]) => [normalize(k), v])
+);
+
 async function main() {
   const rows = await loadXLSX();
-  const key = Object.keys(rows[0]).find(k => k.trim().toUpperCase().includes("MUNICÍPIO"));
+  const key = Object.keys(rows[0]).find(k => k.toUpperCase().includes('MUNICÍPIO'));
   if (!key) {
-    alert("Coluna com municípios não encontrada no arquivo.");
+    alert('Coluna de município não encontrada no arquivo.');
     return;
   }
 
-  const grouped = groupCount(rows, r => normalize(r[key]));
-  const data = grouped.filter(g => ES_CENTROIDS[g.key]);
+  const counts = {};
+  rows.forEach(r => {
+    const name = normalize(r[key]);
+    if (!name) return;
+    counts[name] = (counts[name] || 0) + 1;
+  });
 
-  const lons = data.map(d => ES_CENTROIDS[d.key][0]);
-  const lats = data.map(d => ES_CENTROIDS[d.key][1]);
-  const text = data.map(d => `${d.key}: ${d.value}`);
+  const points = Object.entries(counts)
+    .filter(([n]) => normalizedCentroids[n])
+    .map(([n, v]) => ({ nome: n, valor: v, coord: normalizedCentroids[n] }));
+
+  const lons = points.map(p => p.coord[0]);
+  const lats = points.map(p => p.coord[1]);
+  const texts = points.map(p => `${p.nome.toUpperCase()}: ${p.valor}`);
 
   const trace = {
     type: 'scattergeo',
     mode: 'markers+text',
     lon: lons,
     lat: lats,
-    text: text,
+    text: texts,
     textposition: 'bottom center',
-    marker: { size: data.map(d => 6 + d.value * 2), color: '#2A61A8', opacity: 0.7 }
+    marker: { size: points.map(p => 5 + p.valor * 2), color: '#2A61A8', opacity: 0.7 }
   };
 
   const layout = {
     geo: {
-      scope: 'south america',
       projection: { type: 'mercator' },
       lonaxis: { range: [-41.9, -39.0] },
       lataxis: { range: [-21.4, -18.0] },
       showland: true,
-      landcolor: '#f5f5f5',
-      countrycolor: '#ccc',
-      showframe: false,
-      fitbounds: 'locations'
+      landcolor: '#f6f6f6',
+      showframe: false
     },
     margin: { t: 0, b: 0, l: 0, r: 0 },
     paper_bgcolor: 'rgba(0,0,0,0)',
@@ -93,7 +103,5 @@ async function main() {
   Plotly.newPlot('chartMapaES', [trace], layout, { displayModeBar: false, responsive: true });
 }
 
-if (document.readyState === 'loading')
-  document.addEventListener('DOMContentLoaded', main);
-else
-  main();
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', main);
+else main();
