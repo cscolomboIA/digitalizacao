@@ -1,40 +1,30 @@
-// map.js — IntegraCAR · Mapa ES funcionando
+// map.js — IntegraCAR · Mapa ES com reconhecimento inteligente de municípios
 
 const FILE_PATH = "data.xlsx";
 
-// Normaliza para comparar nomes de forma robusta
+// ---------------- Utilidades ----------------
+
 function normalizeName(str) {
   return (str || "")
     .toString()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\u0300-\u036f]/g, "") // tira acentos
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
 }
 
-// Carrega planilha XLSX
-async function loadXlsxRows() {
-  const res = await fetch(FILE_PATH);
-  if (!res.ok) {
-    console.error("Erro ao baixar", FILE_PATH, res.status);
-    throw new Error("Não foi possível carregar o arquivo de dados do mapa.");
-  }
-  const buf = await res.arrayBuffer();
-  const wb = XLSX.read(buf, { type: "array" });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(ws, { defval: "" });
+// remove sufixos tipo " - ES", "/ES", "(ES)"
+function stripEsSuffix(name) {
+  return name
+    .replace(/[-/]\s*es$/i, "")
+    .replace(/\(es\)$/i, "")
+    .replace(/,\s*es$/i, "")
+    .trim();
 }
 
-// Detecta a coluna de município (NOME MUNICÍPIO, etc.)
-function detectMunicipioColumn(headers) {
-  return headers.find(h => {
-    const n = normalizeName(h);
-    return n.includes("munic"); // pega NOME MUNICÍPIO / MUNICIPIO / MUNICÍPIOS
-  }) || null;
-}
-
-// Centroides dos municípios do ES
+// ---------------- Centroides ES ----------------
+// chaves já normalizadas (sem acento, minúsculo)
 const ES_CENTROIDS = {
   "afonso claudio": [-41.126, -20.074],
   "agua doce do norte": [-40.985, -18.548],
@@ -110,13 +100,84 @@ const ES_CENTROIDS = {
   "vargem alta": [-41.006, -20.67],
   "venda nova do imigrante": [-41.126, -20.33],
   "viana": [-40.495, -20.393],
-  "vila pavão": [-40.607, -18.613],
+  "vila pavao": [-40.607, -18.613],
   "vila valerio": [-40.39, -18.993],
   "vila velha": [-40.292, -20.329],
   "vitoria": [-40.308, -20.315]
 };
 
-// Função principal
+// sinônimos / abreviações comuns -> chave do ES_CENTROIDS
+const SYNONYMS = {
+  "cachoeiro": "cachoeiro de itapemirim",
+  "cachoeiro itapemirim": "cachoeiro de itapemirim",
+  "cachoeiro de itapemirim es": "cachoeiro de itapemirim",
+  "sao mateus es": "sao mateus",
+  "sao mateus-do-sul": "sao mateus", // só pra garantir se vier zoado
+  "vila velha es": "vila velha",
+  "guarapari es": "guarapari",
+  "linhares es": "linhares",
+  "colatina es": "colatina",
+  "serra es": "serra",
+  "vitoria es": "vitoria",
+  "afonso claudio es": "afonso claudio",
+  "aracruz es": "aracruz",
+  "nova venecia es": "nova venecia"
+};
+
+// tenta mapear o nome lido para uma chave válida do ES_CENTROIDS
+function mapMunicipioToES(name) {
+  if (!name) return null;
+
+  let norm = normalizeName(name);
+  if (!norm) return null;
+
+  norm = stripEsSuffix(norm);
+
+  // 1) match direto
+  if (ES_CENTROIDS[norm]) return norm;
+
+  // 2) sinônimo direto
+  if (SYNONYMS[norm] && ES_CENTROIDS[SYNONYMS[norm]]) {
+    return SYNONYMS[norm];
+  }
+
+  // 3) tentar "começa com" (ex: "cachoeiro" -> "cachoeiro de itapemirim")
+  const direct = Object.keys(ES_CENTROIDS).filter(k =>
+    k.startsWith(norm) || norm.startsWith(k)
+  );
+  if (direct.length === 1) return direct[0];
+
+  // 4) tentar "contém" de forma segura
+  const contains = Object.keys(ES_CENTROIDS).filter(k =>
+    k.includes(norm) || norm.includes(k)
+  );
+  if (contains.length === 1) return contains[0];
+
+  // sem match confiável
+  return null;
+}
+
+// ---------------- Leitura XLSX ----------------
+
+async function loadXlsxRows() {
+  const res = await fetch(FILE_PATH);
+  if (!res.ok) {
+    console.error("Erro ao baixar", FILE_PATH, res.status);
+    throw new Error("Não foi possível carregar o arquivo de dados do mapa.");
+  }
+  const buf = await res.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws, { defval: "" });
+}
+
+// Detecta coluna de município (qualquer coisa com "munic" no nome)
+function detectMunicipioColumn(headers) {
+  return headers.find(h => normalizeName(h).includes("munic")) || null;
+}
+
+// ---------------- Plotagem ----------------
+
 async function mainMapaES() {
   try {
     const rows = await loadXlsxRows();
@@ -127,20 +188,19 @@ async function mainMapaES() {
 
     const headers = Object.keys(rows[0]);
     const munCol = detectMunicipioColumn(headers);
-
     if (!munCol) {
       document.getElementById("chartMapaES").innerHTML =
-        "Coluna de município não encontrada no arquivo (esperado algo como 'NOME MUNICÍPIO').";
+        "Coluna de município não encontrada no arquivo.";
       return;
     }
 
-    // Contagem por município normalizado
+    // contagem por município mapeado
     const counts = {};
     rows.forEach(r => {
-      const nomeBruto = r[munCol];
-      const norm = normalizeName(nomeBruto);
-      if (!norm) return;
-      counts[norm] = (counts[norm] || 0) + 1;
+      const original = r[munCol];
+      const key = mapMunicipioToES(original);
+      if (!key) return;
+      counts[key] = (counts[key] || 0) + 1;
     });
 
     const lons = [];
@@ -148,21 +208,19 @@ async function mainMapaES() {
     const texts = [];
     const sizes = [];
 
-    Object.entries(counts).forEach(([norm, qtd]) => {
-      const centro = ES_CENTROIDS[norm];
-      if (!centro) {
-        // Município fora do ES ou nome diferente do dicionário → ignora
-        return;
-      }
-      lons.push(centro[0]);
-      lats.push(centro[1]);
-      texts.push(`${norm.toUpperCase()}: ${qtd}`);
-      sizes.push(8 + Math.min(30, qtd * 3));
+    Object.entries(counts).forEach(([key, value]) => {
+      const coord = ES_CENTROIDS[key];
+      if (!coord) return;
+      lons.push(coord[0]);
+      lats.push(coord[1]);
+      const label = key.toUpperCase();
+      texts.push(`${label}: ${value}`);
+      sizes.push(8 + Math.min(30, value * 3));
     });
 
     if (!lons.length) {
       document.getElementById("chartMapaES").innerHTML =
-        "Nenhum município do ES foi reconhecido nos dados (confira os nomes).";
+        "Nenhum município do ES foi reconhecido nos dados (ajustei a lógica; se persistir, veja se os nomes estão muito diferentes).";
       return;
     }
 
@@ -176,7 +234,7 @@ async function mainMapaES() {
       marker: {
         size: sizes,
         color: "#2A61A8",
-        opacity: 0.8,
+        opacity: 0.85,
         line: { width: 1, color: "#ffffff" }
       },
       hovertemplate: "%{text}<extra></extra>"
@@ -209,7 +267,7 @@ async function mainMapaES() {
   }
 }
 
-// Dispara após carregar a página
+// dispara quando a página estiver pronta
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", mainMapaES);
 } else {
