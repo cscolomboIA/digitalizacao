@@ -1,0 +1,37 @@
+name: Update IntegraCAR data
+
+on:
+  # permite rodar manualmente pelo botão "Run workflow"
+  workflow_dispatch:
+  # agenda automática (ex.: 1 vez por dia às 03:00 UTC)
+  schedule:
+    - cron: "0 3 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download data from IntegraCAR
+        run: |
+          curl -sS "http://simlam.idaf.es.gov.br/webservices/IntegraCAR/wsTitulosEmitidos.php" -o dados_car.json
+
+      - name: Commit and push if changed
+        run: |
+          if git diff --quiet; then
+            echo "No changes in dados_car.json, nothing to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add dados_car.json
+          git commit -m "Update dados_car.json via GitHub Actions"
+          git push
