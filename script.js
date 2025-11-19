@@ -1,81 +1,23 @@
-// ==================== CONFIGURAÇÕES BÁSICAS ====================
+// ==================== CONFIG ====================
 const DATA_URL = 'dados_car.json';
 
-const PAGE_SIZE = 20;
-
-// Elementos de UI (ajuste os IDs se forem diferentes)
-const $ = (sel) => document.querySelector(sel);
-
-const elCampus = $('#filter-campus');
-const elAutor = $('#filter-autor');
-const elMunicipio = $('#filter-municipio');
-const elStatus = $('#filter-status');
-const elBusca = $('#filter-search');
-
-const elTabelaBody = $('#table-body');
-const elPaginacao = $('#pagination');
-
-const cardTotalTitulos = $('#card-total-titulos');
-const cardTotalMunicipios = $('#card-total-municipios');
-const cardTotalAutores = $('#card-total-autores');
-const cardTotalConcluidos = $('#card-total-concluidos'); // ou outro status que quiser destacar
-
-// Canvas dos gráficos
-const ctxStatus = $('#chart-status');
-const ctxCampus = $('#chart-campus');
-
-// Mapa
-let map;
-let layerMunicipios;
-
-// Estado global
-let originalData = [];
+let rawData = [];
 let filteredData = [];
-let currentPage = 1;
 
-// Charts (para poder atualizar)
-let chartStatus;
-let chartCampus;
+// DataTable + gráficos
+let dataTable;
+let campusChartInitialized = false;
+let municipioChartInitialized = false;
 
-// ==================== CARREGAMENTO INICIAL ====================
-
-document.addEventListener('DOMContentLoaded', () => {
-  carregarDados();
-  registrarEventosFiltro();
-});
-
-// ==================== BUSCA E NORMALIZAÇÃO ====================
-
-async function carregarDados() {
-  try {
-    const resp = await fetch(DATA_URL);
-    if (!resp.ok) throw new Error('Erro ao buscar dados_car.json');
-
-    const json = await resp.json();
-
-    // json deve ser um array de objetos
-    originalData = json.map(normalizarRegistro);
-    filteredData = [...originalData];
-
-    popularFiltros();
-    atualizarTudo();
-
-    inicializarMapa(); // só chama depois de ter os dados
-  } catch (err) {
-    console.error('Erro ao carregar dados:', err);
-  }
-}
+// ==================== HELPERS ====================
+const $id = (id) => document.getElementById(id);
 
 function normalizarRegistro(r) {
-  // Ajuste os nomes exatamente como estão no JSON
   return {
-    numeroTitulo: r['Nº TÍTULO'] || r['NUMERO_TITULO'] || '',
-    situacaoTitulo: r['SITUAÇÃO TÍTULO'] || r['SITUACAO_TITULO'] || '',
-    idSetor: r['ID SETOR'] || '',
+    numeroTitulo: r['Nº TÍTULO'] || '',
+    situacaoTitulo: r['SITUAÇÃO TÍTULO'] || '',
     nomeSetor: r['NOME SETOR'] || '',
-    idAutor: r['ID AUTOR'] || '',
     nomeAutor: r['NOME AUTOR'] || '',
-    idMunicipio: r['ID MUNICÍPIO'] || '',
     nomeMunicipio: r['NOME MUNICÍPIO'] || '',
     numProcessoEDocs: r['Nº PROCESSO E-DOCS'] || '',
     numProcessoSimlam: r['Nº PROCESSO SIMLAM'] || '',
@@ -84,362 +26,296 @@ function normalizarRegistro(r) {
   };
 }
 
+function arrayUnica(lista) {
+  return Array.from(new Set(lista.filter(Boolean))).sort((a, b) =>
+    a.localeCompare(b, 'pt-BR')
+  );
+}
+
+// ==================== CARREGAMENTO INICIAL ====================
+
+$(document).ready(function () {
+  carregarDados();
+
+  // Botão limpar filtros
+  $('#btnLimpar').on('click', () => {
+    $('#fCampus').val('');
+    $('#fMunicipio').val('');
+    $('#fFuncao').val('');
+    aplicarFiltros();
+  });
+
+  // Exportar CSV
+  $('#btnDownloadCSV').on('click', exportarCSV);
+
+  // Filtros
+  $('#fCampus, #fMunicipio, #fFuncao').on('change', aplicarFiltros);
+});
+
+function carregarDados() {
+  $.getJSON(DATA_URL)
+    .done((json) => {
+      rawData = json.map(normalizarRegistro);
+      filteredData = [...rawData];
+
+      popularFiltros();
+      atualizarKPIs();
+      inicializarTabela();
+      atualizarTabela();
+      desenharGraficos();
+    })
+    .fail((err) => {
+      console.error('Erro ao carregar dados_car.json', err);
+    });
+}
+
 // ==================== FILTROS ====================
 
 function popularFiltros() {
-  preencherSelectUnico(elCampus, originalData.map(d => d.nomeSetor));
-  preencherSelectUnico(elAutor, originalData.map(d => d.nomeAutor));
-  preencherSelectUnico(elMunicipio, originalData.map(d => d.nomeMunicipio));
-  preencherSelectUnico(elStatus, originalData.map(d => d.situacaoTitulo));
-}
+  const campusLista = arrayUnica(rawData.map((d) => d.nomeSetor));
+  const municipioLista = arrayUnica(rawData.map((d) => d.nomeMunicipio));
+  const funcaoLista = arrayUnica(rawData.map((d) => d.nomeAutor));
 
-function preencherSelectUnico(selectEl, lista) {
-  if (!selectEl) return;
-  const valores = Array.from(new Set(lista.filter(Boolean))).sort((a, b) =>
-    a.localeCompare(b, 'pt-BR')
+  const fCampus = $('#fCampus');
+  const fMunicipio = $('#fMunicipio');
+  const fFuncao = $('#fFuncao');
+
+  campusLista.forEach((c) => fCampus.append(`<option value="${c}">${c}</option>`));
+  municipioLista.forEach((m) =>
+    fMunicipio.append(`<option value="${m}">${m}</option>`)
   );
-
-  selectEl.innerHTML = '<option value="">Todos</option>';
-  for (const v of valores) {
-    const opt = document.createElement('option');
-    opt.value = v;
-    opt.textContent = v;
-    selectEl.appendChild(opt);
-  }
-}
-
-function registrarEventosFiltro() {
-  const filtros = [elCampus, elAutor, elMunicipio, elStatus, elBusca];
-  filtros.forEach(f => {
-    if (f) f.addEventListener('input', () => {
-      currentPage = 1;
-      aplicarFiltros();
-    });
-  });
+  funcaoLista.forEach((a) => fFuncao.append(`<option value="${a}">${a}</option>`));
 }
 
 function aplicarFiltros() {
-  const campus = elCampus?.value || '';
-  const autor = elAutor?.value || '';
-  const municipio = elMunicipio?.value || '';
-  const status = elStatus?.value || '';
-  const busca = (elBusca?.value || '').toLowerCase();
+  const campusSel = $('#fCampus').val();
+  const municipioSel = $('#fMunicipio').val();
+  const funcaoSel = $('#fFuncao').val();
 
-  filteredData = originalData.filter(d => {
-    if (campus && d.nomeSetor !== campus) return false;
-    if (autor && d.nomeAutor !== autor) return false;
-    if (municipio && d.nomeMunicipio !== municipio) return false;
-    if (status && d.situacaoTitulo !== status) return false;
-
-    if (busca) {
-      const texto =
-        `${d.numeroTitulo} ${d.nomeAutor} ${d.nomeMunicipio} ${d.nomeSetor} ${d.situacaoTitulo}`.toLowerCase();
-      if (!texto.includes(busca)) return false;
-    }
-
+  filteredData = rawData.filter((d) => {
+    if (campusSel && d.nomeSetor !== campusSel) return false;
+    if (municipioSel && d.nomeMunicipio !== municipioSel) return false;
+    if (funcaoSel && d.nomeAutor !== funcaoSel) return false;
     return true;
   });
 
-  atualizarTudo();
-}
-
-// ==================== ATUALIZAÇÃO GERAL ====================
-
-function atualizarTudo() {
-  atualizarCards();
+  atualizarKPIs();
   atualizarTabela();
-  atualizarPaginacao();
-  atualizarGraficos();
-  atualizarMapa(); // repinta o mapa com os filtros
+  desenharGraficos();
 }
 
-// ==================== CARDS RESUMO ====================
+// ==================== KPIs ====================
 
-function atualizarCards() {
-  if (cardTotalTitulos)
-    cardTotalTitulos.textContent = filteredData.length.toString();
+function atualizarKPIs() {
+  $('#kpiTotal').text(filteredData.length);
 
-  if (cardTotalMunicipios) {
-    const qtd = new Set(filteredData.map(d => d.nomeMunicipio)).size;
-    cardTotalMunicipios.textContent = qtd.toString();
-  }
+  $('#kpiCampi').text(
+    new Set(filteredData.map((d) => d.nomeSetor).filter(Boolean)).size
+  );
 
-  if (cardTotalAutores) {
-    const qtd = new Set(filteredData.map(d => d.nomeAutor)).size;
-    cardTotalAutores.textContent = qtd.toString();
-  }
+  $('#kpiMunicipios').text(
+    new Set(filteredData.map((d) => d.nomeMunicipio).filter(Boolean)).size
+  );
 
-  if (cardTotalConcluidos) {
-    const concluidos = filteredData.filter(
-      d => d.situacaoTitulo.toLowerCase().includes('conclu')
-    ).length;
-    cardTotalConcluidos.textContent = concluidos.toString();
-  }
+  $('#kpiOrientadores').text(
+    new Set(filteredData.map((d) => d.nomeAutor).filter(Boolean)).size
+  );
 }
 
-// ==================== TABELA + PAGINAÇÃO ====================
+// ==================== TABELA (DataTables) ====================
+
+function inicializarTabela() {
+  dataTable = $('#dataTable').DataTable({
+    data: montarLinhasTabela(filteredData),
+    columns: [
+      { title: 'Nº Título' },
+      { title: 'Situação' }, // status do processo
+      { title: 'Campus/Setor' },
+      { title: 'Município' },
+      { title: 'Autor/Bolsista' },
+      { title: 'Data de Emissão' },
+      { title: 'Processo E-Docs' },
+      { title: 'Processo SIMLAM' },
+      { title: 'Cód. Empreendimento' }
+    ],
+    pageLength: 25,
+    order: [[0, 'desc']],
+    language: {
+      url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json'
+    }
+  });
+}
+
+function montarLinhasTabela(dados) {
+  return dados.map((d) => [
+    d.numeroTitulo,
+    d.situacaoTitulo,
+    d.nomeSetor,
+    d.nomeMunicipio,
+    d.nomeAutor,
+    d.dataEmissao,
+    d.numProcessoEDocs,
+    d.numProcessoSimlam,
+    d.codigoEmpreendimento
+  ]);
+}
 
 function atualizarTabela() {
-  if (!elTabelaBody) return;
-
-  elTabelaBody.innerHTML = '';
-
-  const inicio = (currentPage - 1) * PAGE_SIZE;
-  const fim = inicio + PAGE_SIZE;
-  const pageData = filteredData.slice(inicio, fim);
-
-  for (const d of pageData) {
-    const tr = document.createElement('tr');
-
-    tr.innerHTML = `
-      <td>${d.numeroTitulo}</td>
-      <td>${d.situacaoTitulo}</td>
-      <td>${d.nomeMunicipio}</td>
-      <td>${d.nomeAutor}</td>
-      <td>${d.nomeSetor}</td>
-      <td>${d.dataEmissao}</td>
-      <td>${d.numProcessoSimlam}</td>
-    `;
-
-    elTabelaBody.appendChild(tr);
-  }
-
-  if (pageData.length === 0) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="7" class="text-center">Nenhum registro encontrado</td>`;
-    elTabelaBody.appendChild(tr);
-  }
+  if (!dataTable) return;
+  dataTable.clear();
+  dataTable.rows.add(montarLinhasTabela(filteredData));
+  dataTable.draw();
 }
 
-function atualizarPaginacao() {
-  if (!elPaginacao) return;
+// ==================== EXPORTAR CSV ====================
 
-  elPaginacao.innerHTML = '';
+function exportarCSV() {
+  if (!filteredData.length) return;
 
-  const totalPages = Math.ceil(filteredData.length / PAGE_SIZE) || 1;
+  const cabecalho = [
+    'Nº Título',
+    'Situação Título',
+    'Campus/Setor',
+    'Município',
+    'Autor/Bolsista',
+    'Data de Emissão',
+    'Nº Processo E-Docs',
+    'Nº Processo SIMLAM',
+    'Código Empreendimento'
+  ];
 
-  const criarBotao = (label, page, disabled = false, active = false) => {
-    const btn = document.createElement('button');
-    btn.textContent = label;
-    btn.disabled = disabled;
-    btn.className = 'page-btn' + (active ? ' active' : '');
-    btn.addEventListener('click', () => {
-      currentPage = page;
-      atualizarTabela();
-      atualizarPaginacao();
-    });
-    return btn;
-  };
+  const linhas = filteredData.map((d) => [
+    d.numeroTitulo,
+    d.situacaoTitulo,
+    d.nomeSetor,
+    d.nomeMunicipio,
+    d.nomeAutor,
+    d.dataEmissao,
+    d.numProcessoEDocs,
+    d.numProcessoSimlam,
+    d.codigoEmpreendimento
+  ]);
 
-  // Anterior
-  elPaginacao.appendChild(
-    criarBotao('«', Math.max(1, currentPage - 1), currentPage === 1)
-  );
+  const csv = [
+    cabecalho.join(';'),
+    ...linhas.map((linha) =>
+      linha
+        .map((valor) => {
+          const v = (valor || '').toString().replace(/"/g, '""');
+          return `"${v}"`;
+        })
+        .join(';')
+    )
+  ].join('\n');
 
-  // Páginas (limita a 7 botões, por exemplo)
-  const maxButtons = 7;
-  let start = Math.max(1, currentPage - Math.floor(maxButtons / 2));
-  let end = Math.min(totalPages, start + maxButtons - 1);
-  if (end - start < maxButtons - 1) {
-    start = Math.max(1, end - maxButtons + 1);
-  }
-
-  for (let p = start; p <= end; p++) {
-    elPaginacao.appendChild(
-      criarBotao(p.toString(), p, false, p === currentPage)
-    );
-  }
-
-  // Próxima
-  elPaginacao.appendChild(
-    criarBotao('»', Math.min(totalPages, currentPage + 1), currentPage === totalPages)
-  );
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'integraCAR_dashboard_car.csv';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
-// ==================== GRÁFICOS (STATUS E CAMPUS) ====================
+// ==================== GRÁFICOS (Plotly) ====================
 
-function atualizarGraficos() {
-  atualizarGraficoStatus();
-  atualizarGraficoCampus();
+function desenharGraficos() {
+  desenharGraficoCampusStatus();   // Campus x Status (stacked) → mostra o status dos processos
+  desenharGraficoMunicipio();      // Municípios (top N)
 }
 
-// --- Gráfico por Status (Situação do Título) ---
-function atualizarGraficoStatus() {
-  if (!ctxStatus) return;
+// --- Gráfico 1: Registros por Campus + Status (stack) ---
+function desenharGraficoCampusStatus() {
+  const divId = 'chartCampus';
 
-  const contagem = agruparEContar(filteredData, d => d.situacaoTitulo || 'Sem situação');
-
-  const labels = Object.keys(contagem).sort((a, b) =>
-    a.localeCompare(b, 'pt-BR')
-  );
-  const dados = labels.map(l => contagem[l]);
-
-  const config = {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Títulos por situação',
-          data: dados
-        }
-      ]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      plugins: {
-        legend: { display: false },
-        title: {
-          display: true,
-          text: 'Status dos processos (Situação do título)'
-        }
-      }
-    }
-  };
-
-  if (chartStatus) {
-    chartStatus.data = config.data;
-    chartStatus.options = config.options;
-    chartStatus.update();
-  } else {
-    chartStatus = new Chart(ctxStatus, config);
-  }
-}
-
-// --- Gráfico por Campus/Setor (top 10) ---
-function atualizarGraficoCampus() {
-  if (!ctxCampus) return;
-
-  const contagem = agruparEContar(filteredData, d => d.nomeSetor || 'Sem setor');
-
-  // ordenar por maior quantidade e pegar top 10
-  const entries = Object.entries(contagem).sort((a, b) => b[1] - a[1]).slice(0, 10);
-  const labels = entries.map(([nome]) => nome);
-  const dados = entries.map(([, qtd]) => qtd);
-
-  const config = {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Títulos por campus/setor',
-          data: dados
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: false },
-        title: {
-          display: true,
-          text: 'Distribuição por Campus/Setor (Top 10)'
-        }
-      },
-      scales: {
-        x: {
-          ticks: { autoSkip: false, maxRotation: 45, minRotation: 0 }
-        }
-      }
-    }
-  };
-
-  if (chartCampus) {
-    chartCampus.data = config.data;
-    chartCampus.options = config.options;
-    chartCampus.update();
-  } else {
-    chartCampus = new Chart(ctxCampus, config);
-  }
-}
-
-function agruparEContar(lista, chaveFn) {
+  // Mapa: campus -> status -> contagem
   const mapa = {};
-  for (const item of lista) {
-    const chave = chaveFn(item);
-    if (!chave) continue;
-    mapa[chave] = (mapa[chave] || 0) + 1;
-  }
-  return mapa;
-}
+  const statusSet = new Set();
 
-// ==================== MAPA DO ES ====================
+  filteredData.forEach((d) => {
+    const campus = d.nomeSetor || 'Sem campus';
+    const status = d.situacaoTitulo || 'Sem situação';
 
-function inicializarMapa() {
-  const mapEl = $('#map-es');
-  if (!mapEl || typeof L === 'undefined') {
-    console.warn('Mapa não inicializado: verifique se o Leaflet foi incluído e se existe #map-es.');
-    return;
-  }
+    statusSet.add(status);
+    if (!mapa[campus]) mapa[campus] = {};
+    mapa[campus][status] = (mapa[campus][status] || 0) + 1;
+  });
 
-  // Centro aproximado do ES
-  map = L.map('map-es').setView([-19.5, -40.5], 7);
+  const campi = Object.keys(mapa).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const statusLista = Array.from(statusSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap'
-  }).addTo(map);
+  const traces = statusLista.map((status) => {
+    const y = campi.map((campus) => mapa[campus][status] || 0);
+    return {
+      x: y,
+      y: campi,
+      type: 'bar',
+      name: status,
+      orientation: 'h'
+    };
+  });
 
-  // Carrega o GeoJSON dos municípios do ES
-  // Você precisa ter esse arquivo no repositório:
-  // ex: es_municipios.geojson na raiz ou em /data/es_municipios.geojson
-  fetch('es_municipios.geojson')
-    .then(r => r.json())
-    .then(geojson => {
-      layerMunicipios = L.geoJSON(geojson, {
-        style: estiloMunicipio,
-        onEachFeature: onEachMunicipio
-      }).addTo(map);
-    })
-    .catch(err => console.error('Erro ao carregar es_municipios.geojson', err));
-}
-
-function obterContagemPorMunicipio() {
-  const counts = {};
-  for (const d of filteredData) {
-    const nome = (d.nomeMunicipio || '').toUpperCase();
-    if (!nome) continue;
-    counts[nome] = (counts[nome] || 0) + 1;
-  }
-  return counts;
-}
-
-function estiloMunicipio(feature) {
-  const counts = obterContagemPorMunicipio();
-  const nome = (feature.properties.NM_MUN || feature.properties.NOME || '').toUpperCase();
-
-  const qtd = counts[nome] || 0;
-
-  // simples "choropleth" por faixas
-  let fillOpacity = 0.2;
-  let weight = 0.5;
-
-  if (qtd > 0) fillOpacity = 0.4;
-  if (qtd >= 5) fillOpacity = 0.6;
-  if (qtd >= 15) fillOpacity = 0.8;
-
-  return {
-    fillColor: '#3182bd',
-    color: '#555',
-    weight,
-    fillOpacity
+  const layout = {
+    title: 'Registros por Campus (empilhado por situação do título)',
+    barmode: 'stack',
+    margin: { l: 140, r: 20, t: 40, b: 40 },
+    xaxis: { title: 'Quantidade' },
+    yaxis: { automargin: true },
+    legend: { orientation: 'h', x: 0, y: 1.1 }
   };
+
+  const config = { responsive: true };
+
+  if (campusChartInitialized) {
+    Plotly.react(divId, traces, layout, config);
+  } else {
+    Plotly.newPlot(divId, traces, layout, config);
+    campusChartInitialized = true;
+  }
 }
 
-function onEachMunicipio(feature, layer) {
-  const counts = obterContagemPorMunicipio();
-  const nome = (feature.properties.NM_MUN || feature.properties.NOME || '').toUpperCase();
-  const qtd = counts[nome] || 0;
+// --- Gráfico 2: Registros por Município (top 15) ---
+function desenharGraficoMunicipio() {
+  const divId = 'chartMunicipio';
 
-  const textoPopup = `<strong>${nome}</strong><br>
-    Títulos IntegraCAR: <strong>${qtd}</strong>`;
+  const contagem = {};
+  filteredData.forEach((d) => {
+    const mun = d.nomeMunicipio || 'Sem município';
+    contagem[mun] = (contagem[mun] || 0) + 1;
+  });
 
-  layer.bindPopup(textoPopup);
-}
+  let lista = Object.entries(contagem); // [ [nome, qtd], ... ]
+  lista.sort((a, b) => b[1] - a[1]); // ordem decrescente por quantidade
 
-function atualizarMapa() {
-  if (!layerMunicipios) return;
-  // Para atualizar estilo com novos filtros, precisamos resetar o estilo
-  layerMunicipios.setStyle(estiloMunicipio);
+  // Limita aos 15 mais frequentes
+  lista = lista.slice(0, 15);
+
+  const municipios = lista.map((p) => p[0]);
+  const valores = lista.map((p) => p[1]);
+
+  const trace = {
+    x: valores,
+    y: municipios,
+    type: 'bar',
+    orientation: 'h',
+    name: 'Registros'
+  };
+
+  const layout = {
+    title: 'Registros por Município (Top 15)',
+    margin: { l: 180, r: 20, t: 40, b: 40 },
+    xaxis: { title: 'Quantidade' },
+    yaxis: { automargin: true }
+  };
+
+  const config = { responsive: true };
+
+  if (municipioChartInitialized) {
+    Plotly.react(divId, [trace], layout, config);
+  } else {
+    Plotly.newPlot(divId, [trace], layout, config);
+    municipioChartInitialized = true;
+  }
 }
