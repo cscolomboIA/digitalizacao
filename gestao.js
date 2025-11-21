@@ -41,13 +41,10 @@ function normalizarMunicipio(nome) {
   const original = nome.toString().trim();
   const base = nrm(original); // sem acento/minúsculo
 
-  // Regras específicas
+  // Corrige variações de Cachoeiro de Itapemirim
   if (base.includes("cachoeiro") && base.includes("itapem")) {
-    // cobre "cachoeiro de itapemirim", "cachoeiro de itapemerim" etc.
     return "Cachoeiro de Itapemirim";
   }
-
-  // Aqui você pode adicionar outras normalizações específicas no futuro
 
   return original;
 }
@@ -58,7 +55,6 @@ function normalizarCampus(nome) {
   const original = nome.toString().trim();
   const base = nrm(original);
 
-  // mapeia variações conhecidas para o padrão
   if (base === "alegre") return "Alegre";
   if (base === "barra de sao francisco") return "Barra de São Francisco";
   if (base === "cachoeiro de itapemirim" || base === "cachoeiro de itapemerim")
@@ -67,15 +63,29 @@ function normalizarCampus(nome) {
   if (base === "itapina") return "Itapina";
   if (base === "linhares") return "Linhares";
   if (base === "montanha") return "Montanha";
-  if (base === "nova venecia" || base === "nova venecia")
+  if (base === "nova venecia" || base === "nova veneccia")
     return "Nova Venécia";
   if (base === "piuma") return "Piúma";
   if (base === "santa teresa") return "Santa Teresa";
   if (base === "vitoria") return "Vitória";
   if (base === "idaf") return "Idaf";
 
-  // se não bater nenhuma regra, devolve como veio (ajustado)
   return original || "Sem campus";
+}
+
+// Normaliza nomes de avaliadores
+function normalizarAvaliador(nome) {
+  if (!nome) return "Sem avaliador";
+  const original = nome.toString().trim();
+  const base = nrm(original);
+
+  // Unifica Lyndemberg / Lyndenberg em um único nome
+  if (base.startsWith("lyndemberg") || base.startsWith("lyndenberg")) {
+    return "Lyndemberg";
+  }
+
+  // aqui podemos adicionar outros ajustes no futuro
+  return original;
 }
 
 // ----------------------------------------------
@@ -186,7 +196,7 @@ function applyFilters(rows) {
     const rc = campus ? nrm(normalizarCampus(r[campus])) : "";
     const rm = municipio ? nrm(normalizarMunicipio(r[municipio])) : "";
     const rs = status ? nrm(r[status]) : "";
-    const ra = avaliador ? nrm(r[avaliador]) : "";
+    const ra = avaliador ? nrm(normalizarAvaliador(r[avaliador])) : "";
 
     return (!c || rc === c) &&
            (!m || rm === m) &&
@@ -425,7 +435,8 @@ function plotAvaliador(rows) {
 
   const map = {};
   rows.forEach(r => {
-    const a = (r[avaliador] || "Sem avaliador").toString().trim();
+    const aRaw = (r[avaliador] || "Sem avaliador").toString().trim();
+    const a = normalizarAvaliador(aRaw);
     map[a] = (map[a] || 0) + 1;
   });
 
@@ -482,7 +493,7 @@ function buildPendencias(rows) {
         status: r[status],
         dias,
         meta: metaDias,
-        avaliador: r[avaliador] || "",
+        avaliador: avaliador ? normalizarAvaliador(r[avaliador]) : "",
         codigo: r[codigo] || ""
       });
     }
@@ -529,7 +540,7 @@ async function initGestao() {
     fillSelect("fGestaoCampus", G_ROWS.map(r => normalizarCampus(r[G_COLS.campus])), "Todos");
     fillSelect("fGestaoMunicipio", G_ROWS.map(r => normalizarMunicipio(r[G_COLS.municipio])), "Todos");
     fillSelect("fGestaoStatus", G_ROWS.map(r => r[G_COLS.status]), "Todos");
-    fillSelect("fGestaoAvaliador", G_ROWS.map(r => r[G_COLS.avaliador]), "Todos");
+    fillSelect("fGestaoAvaliador", G_ROWS.map(r => normalizarAvaliador(r[G_COLS.avaliador])), "Todos");
 
     const btn = document.getElementById("btnGestaoLimpar");
     if (btn) {
