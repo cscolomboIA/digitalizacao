@@ -249,6 +249,56 @@ function updateKPIs(rows) {
 // ----------------------------------------------
 // GRÁFICOS
 // ----------------------------------------------
+
+// Abrevia labels longos de status para caber melhor no eixo Y
+function abreviarStatus(texto) {
+  if (!texto) return texto;
+
+  let t = texto.trim();
+  const lower = t.toLowerCase();
+
+  // substituições comuns
+  const regras = [
+    { de: "aprovado", para: "Aprov." },
+    { de: "aprovada", para: "Aprov." },
+    { de: "reprovado", para: "Reprov." },
+    { de: "reprovada", para: "Reprov." },
+    { de: "indeferido", para: "Indef." },
+    { de: "indeferida", para: "Indef." },
+    { de: "cancelado", para: "Canc." },
+    { de: "cancelada", para: "Canc." },
+    { de: "aguardando", para: "Aguard." },
+    { de: "complementação", para: "compl." },
+    { de: "complementacao", para: "compl." },
+    { de: "documentação", para: "doc." },
+    { de: "documentacao", para: "doc." },
+    { de: "título emitido e entregue", para: "tit. emit./entreg." },
+    { de: "titulo emitido e entregue", para: "tit. emit./entreg." },
+    { de: "emitido e entregue", para: "emit./entreg." },
+    { de: "em análise", para: "Análise" },
+    { de: "em analise", para: "Análise" },
+    { de: "análise", para: "Análise" },
+    { de: "analise", para: "Análise" }
+  ];
+
+  let result = lower;
+  regras.forEach(reg => {
+    if (result.includes(reg.de)) {
+      result = result.replace(reg.de, reg.para.toLowerCase());
+    }
+  });
+
+  // limita tamanho geral
+  if (result.length > 32) {
+    result = result.substring(0, 32) + "...";
+  }
+
+  // capitalização simples: primeira letra maiúscula
+  result = result.charAt(0).toUpperCase() + result.slice(1);
+
+  return result;
+}
+
 function plotStatus(rows) {
   const { status } = G_COLS;
   const map = {};
@@ -258,24 +308,28 @@ function plotStatus(rows) {
     map[rot] = (map[rot] || 0) + 1;
   });
 
-  const labels = Object.keys(map);
-  const values = labels.map(k => map[k]);
+  const labelsOriginais = Object.keys(map);
+  const values = labelsOriginais.map(k => map[k]);
 
-  // altura proporcional à quantidade de status
-  const numStatuses = labels.length || 1;
-  const height = Math.max(250, Math.min(700, numStatuses * 28));
+  // aplica abreviação nas labels
+  const labelsAjustados = labelsOriginais.map(l => abreviarStatus(l));
+
+  // altura proporcional à quantidade de categorias
+  const num = labelsAjustados.length || 1;
+  const height = Math.max(240, Math.min(700, num * 28));
 
   Plotly.newPlot("chartGStatus", [{
     x: values,
-    y: labels,
+    y: labelsAjustados,
     type: "bar",
     orientation: "h",
-    hovertemplate: "%{y}: %{x}<extra></extra>"
+    // hover: só o valor (número de processos)
+    hovertemplate: "%{x}<extra></extra>"
   }], {
     height: height,
     margin: {
       t: 10,
-      l: 260,  // margem maior para caber textos longos
+      l: 220,
       r: 20,
       b: 40
     },
@@ -295,7 +349,7 @@ function plotStatus(rows) {
   });
 }
 
-// *** NOVA VERSÃO: igual ao gráfico de Município, uma barra por campus ***
+// *** VERSÃO: igual ao gráfico de Município, uma barra por campus ***
 function plotPorCampus(rows) {
   const { campus } = G_COLS;
   if (!campus) return;
