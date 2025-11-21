@@ -73,7 +73,7 @@ function normalizarCampus(nome) {
   return original || "Sem campus";
 }
 
-// Normaliza nomes de avaliadores (para agrupamento)
+// Normaliza nomes de avaliadores (para agrupamento/filtro)
 function normalizarAvaliador(nome) {
   if (!nome) return "Sem avaliador";
   const original = nome.toString().trim();
@@ -443,7 +443,7 @@ function plotPorMunicipio(rows) {
 }
 
 // --- Desempenho por Avaliador (top 10) ---
-// agrupa por avaliador normalizado, mas mostra só primeiro + último nome
+// agrupa por avaliador normalizado (chave nrm), mas mostra só primeiro + último nome
 function plotAvaliador(rows) {
   const { avaliador } = G_COLS;
   if (!avaliador) return;
@@ -451,17 +451,21 @@ function plotAvaliador(rows) {
   const map = {};
   rows.forEach(r => {
     const aRaw = (r[avaliador] || "Sem avaliador").toString().trim();
+    if (!aRaw) return;
     const aNorm = normalizarAvaliador(aRaw);
-    map[aNorm] = (map[aNorm] || 0) + 1;
+    const key = nrm(aNorm);          // chave de agrupamento insensível a acento/caixa
+    if (!map[key]) {
+      map[key] = { labelFull: aNorm, count: 0 };
+    }
+    map[key].count += 1;
   });
 
-  const arr = Object.entries(map)
-    .map(([k,v]) => ({k,v}))
-    .sort((a,b) => b.v - a.v)
+  const arr = Object.values(map)
+    .sort((a,b) => b.count - a.count)
     .slice(0,10);
 
-  const valores = arr.map(x => x.v);
-  const labelsCurta = arr.map(x => resumirNomeAvaliador(x.k));
+  const valores = arr.map(x => x.count);
+  const labelsCurta = arr.map(x => resumirNomeAvaliador(x.labelFull));
 
   Plotly.newPlot("chartGAvaliador", [{
     x: valores,
