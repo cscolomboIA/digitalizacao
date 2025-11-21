@@ -35,6 +35,25 @@ function diffDays(a, b) {
   return Math.floor((b - a) / (1000 * 60 * 60 * 24));
 }
 
+// Normaliza nomes de municípios para forma canônica
+function normalizarMunicipio(nome) {
+  if (!nome) return nome;
+  const original = nome.toString().trim();
+  const base = original
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  // Corrige variações de "Cachoeiro de Itapemirim" digitadas errado
+  // (ex.: "Cachoeiro de Itapemerim", etc.)
+  if (base.includes("cachoeiro") && base.includes("itapem")) {
+    return "Cachoeiro de Itapemirim";
+  }
+
+  // aqui dá pra adicionar outras regras se forem surgindo inconsistências
+  return original;
+}
+
 // ----------------------------------------------
 // LEITURA DO CSV
 // ----------------------------------------------
@@ -141,7 +160,7 @@ function applyFilters(rows) {
 
   return rows.filter(r => {
     const rc = campus ? nrm(r[campus]) : "";
-    const rm = municipio ? nrm(r[municipio]) : "";
+    const rm = municipio ? nrm(normalizarMunicipio(r[municipio])) : "";
     const rs = status ? nrm(r[status]) : "";
     const ra = avaliador ? nrm(r[avaliador]) : "";
 
@@ -255,7 +274,6 @@ function abreviarStatus(texto) {
   if (!texto) return texto;
   let t = texto.trim();
 
-  // substituições simples (se quiser enriquecer depois, é aqui)
   const lower = t.toLowerCase();
   if (lower.startsWith("aprovado")) t = "Aprov. " + t.substring(8).trim();
   if (lower.startsWith("aprovada")) t = "Aprov. " + t.substring(8).trim();
@@ -265,7 +283,6 @@ function abreviarStatus(texto) {
   if (lower.startsWith("reprovada")) t = "Reprov. " + t.substring(9).trim();
   if (lower.startsWith("aguardando")) t = "Aguard. " + t.substring(10).trim();
 
-  // limite duro de tamanho para garantir que não corte visualmente
   const MAX_LEN = 30;
   if (t.length > MAX_LEN) {
     t = t.substring(0, MAX_LEN) + "...";
@@ -286,10 +303,8 @@ function plotStatus(rows) {
   const labelsOriginais = Object.keys(map);
   const values = labelsOriginais.map(k => map[k]);
 
-  // aplica abreviação nas labels
   const labelsAjustados = labelsOriginais.map(l => abreviarStatus(l));
 
-  // altura proporcional à quantidade de categorias
   const num = labelsAjustados.length || 1;
   const height = Math.max(240, Math.min(700, num * 28));
 
@@ -298,7 +313,6 @@ function plotStatus(rows) {
     y: labelsAjustados,
     type: "bar",
     orientation: "h",
-    // hover: só o valor (número de processos)
     hoverinfo: "x",
     hovertemplate: "%{x}<extra></extra>"
   }], {
@@ -361,7 +375,8 @@ function plotPorMunicipio(rows) {
 
   const map = {};
   rows.forEach(r => {
-    const m = (r[municipio] || "Sem município").toString().trim();
+    const mRaw = (r[municipio] || "Sem município").toString().trim();
+    const m = normalizarMunicipio(mRaw);
     map[m] = (map[m] || 0) + 1;
   });
 
@@ -436,7 +451,7 @@ function buildPendencias(rows) {
     if (falta <= 5) {
       data.push({
         campus: campus ? r[campus] : "",
-        municipio: municipio ? r[municipio] : "",
+        municipio: municipio ? normalizarMunicipio(r[municipio]) : "",
         status: r[status],
         dias,
         meta: metaDias,
@@ -485,7 +500,7 @@ async function initGestao() {
     G_COLS = detectColumns(G_ROWS);
 
     fillSelect("fGestaoCampus", G_ROWS.map(r => r[G_COLS.campus]), "Todos");
-    fillSelect("fGestaoMunicipio", G_ROWS.map(r => r[G_COLS.municipio]), "Todos");
+    fillSelect("fGestaoMunicipio", G_ROWS.map(r => normalizarMunicipio(r[G_COLS.municipio])), "Todos");
     fillSelect("fGestaoStatus", G_ROWS.map(r => r[G_COLS.status]), "Todos");
     fillSelect("fGestaoAvaliador", G_ROWS.map(r => r[G_COLS.avaliador]), "Todos");
 
