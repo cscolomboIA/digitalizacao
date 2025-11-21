@@ -153,13 +153,6 @@ function updateKPIs(rows) {
   let inSLA = 0, outSLA = 0;
 
   // card "Processos sem meta explícita"
-  let semMetaTotal = 0;function updateKPIs(rows) {
-  const { status, inicio, ultima, meta } = G_COLS;
-  const total = rows.length;
-  let concluidos = 0, emAnalise = 0, pendentes = 0;
-  let inSLA = 0, outSLA = 0;
-
-  // card "Processos sem meta explícita"
   let semMetaTotal = 0;
   let semMetaDentro = 0;
   let semMetaFora = 0;
@@ -186,8 +179,8 @@ function updateKPIs(rows) {
 
     // --- META / SLA ---
     const rawMetaVal = meta ? r[meta] : null;
-    let   metaDias   = Number.parseInt(rawMetaVal);
-    const sNorm      = nrm(rawStatus);
+    let metaDias = Number.parseInt(rawMetaVal);
+    const sNorm = nrm(rawStatus);
 
     const isFinalizadoAutuado =
       sNorm.includes("finaliz") || // finalizado
@@ -255,102 +248,7 @@ function updateKPIs(rows) {
       `Concluídos fora do prazo: ${concluidosForaPrazo}`;
   }
 
-  // debug opcional no console
   console.log("SLA debug:", { total, inSLA, outSLA });
-}
-
-  let semMetaDentro = 0;
-  let semMetaFora = 0;
-
-  // novo card: concluídos fora do prazo
-  let concluidosForaPrazo = 0;
-
-  rows.forEach(r => {
-    const rawStatus = status ? r[status] : "";
-    const cls = classStatus(rawStatus);
-
-    // contadores básicos de status
-    if (cls === "concluido") concluidos++;
-    else if (cls === "em_analise") emAnalise++;
-    else if (cls === "pendente") pendentes++;
-
-    const start = inicio ? parseDate(r[inicio]) : null;
-    const last = ultima ? parseDate(r[ultima]) : null;
-    if (!start) return; // sem data de início, não calcula SLA
-
-    const rawMetaVal = meta ? r[meta] : null;
-    const parsedMeta = rawMetaVal != null ? parseInt(rawMetaVal) : null;
-    let metaDias = meta ? (parsedMeta || null) : null;
-
-    const isMetaVazia =
-      rawMetaVal == null ||
-      rawMetaVal.toString().trim() === "" ||
-      isNaN(parseInt(rawMetaVal));
-
-    const ref = last || new Date();
-    const dias = diffDays(start, ref);
-    if (dias == null) return;
-
-    if (isMetaVazia) {
-      semMetaTotal++;
-
-      const sNorm = nrm(rawStatus);
-      const isFinalizadoAutuado =
-        sNorm.includes("finaliz") || // finalizado
-        sNorm.includes("autuad");    // autuado
-
-      if (isFinalizadoAutuado) {
-        // meta vazia + finalizado/autuado => considera dentro do prazo
-        inSLA++;
-        semMetaDentro++;
-        return;
-      } else {
-        // meta vazia + não finalizado/autuado => usar meta padrão 30 dias
-        metaDias = 30;
-      }
-    }
-
-    if (!metaDias) return; // sem meta nem padrão, não contabiliza no SLA
-
-    if (dias <= metaDias) {
-      inSLA++;
-      if (isMetaVazia) semMetaDentro++;
-    } else {
-      outSLA++;
-      if (isMetaVazia) semMetaFora++;
-      if (cls === "concluido") {
-        // concluído com dias > meta => concluído fora do prazo
-        concluidosForaPrazo++;
-      }
-    }
-  });
-
-  const sla = (inSLA + outSLA) ? Math.round(inSLA * 100 / (inSLA + outSLA)) : null;
-
-  document.getElementById("kpiGTotal").textContent = total;
-  document.getElementById("kpiGConcluidos").textContent = concluidos;
-  document.getElementById("kpiGEmAnalise").textContent = emAnalise;
-  document.getElementById("kpiGPendentes").textContent = pendentes;
-  document.getElementById("kpiGSLA").textContent = sla == null ? "–" : sla + "%";
-
-  // card de processos sem meta explícita
-  const semMetaEl = document.getElementById("kpiGSemMeta");
-  if (semMetaEl) {
-    if (semMetaTotal === 0) {
-      semMetaEl.textContent = "Processos sem meta explícita: 0";
-    } else {
-      semMetaEl.textContent =
-        `Processos sem meta explícita: ${semMetaTotal} ` +
-        `(${semMetaDentro} dentro / ${semMetaFora} fora do prazo, usando meta padrão de 30 dias)`;
-    }
-  }
-
-  // novo card: concluídos fora do prazo
-  const conclForaEl = document.getElementById("kpiGConcluidosForaPrazo");
-  if (conclForaEl) {
-    conclForaEl.textContent =
-      `Concluídos fora do prazo: ${concluidosForaPrazo}`;
-  }
 }
 
 // ---------- Gráficos ----------
