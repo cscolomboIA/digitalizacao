@@ -152,10 +152,13 @@ function updateKPIs(rows) {
   let concluidos = 0, emAnalise = 0, pendentes = 0;
   let inSLA = 0, outSLA = 0;
 
-  // contadores para o card "Processos sem meta explícita"
+  // card "Processos sem meta explícita"
   let semMetaTotal = 0;
   let semMetaDentro = 0;
   let semMetaFora = 0;
+
+  // novo card: concluídos fora do prazo
+  let concluidosForaPrazo = 0;
 
   rows.forEach(r => {
     const rawStatus = status ? r[status] : "";
@@ -210,6 +213,10 @@ function updateKPIs(rows) {
     } else {
       outSLA++;
       if (isMetaVazia) semMetaFora++;
+      if (cls === "concluido") {
+        // concluído com dias > meta => concluído fora do prazo
+        concluidosForaPrazo++;
+      }
     }
   });
 
@@ -221,7 +228,7 @@ function updateKPIs(rows) {
   document.getElementById("kpiGPendentes").textContent = pendentes;
   document.getElementById("kpiGSLA").textContent = sla == null ? "–" : sla + "%";
 
-  // Atualiza card de processos sem meta explícita
+  // card de processos sem meta explícita
   const semMetaEl = document.getElementById("kpiGSemMeta");
   if (semMetaEl) {
     if (semMetaTotal === 0) {
@@ -231,6 +238,13 @@ function updateKPIs(rows) {
         `Processos sem meta explícita: ${semMetaTotal} ` +
         `(${semMetaDentro} dentro / ${semMetaFora} fora do prazo, usando meta padrão de 30 dias)`;
     }
+  }
+
+  // novo card: concluídos fora do prazo
+  const conclForaEl = document.getElementById("kpiGConcluidosForaPrazo");
+  if (conclForaEl) {
+    conclForaEl.textContent =
+      `Concluídos fora do prazo: ${concluidosForaPrazo}`;
   }
 }
 
@@ -266,7 +280,7 @@ function plotPorCampus(rows) {
   }
   const mapa = {};
   rows.forEach(r => {
-    const c = (r[campus] || "Sem campus").toString().trim(); // trim aqui
+    const c = (r[campus] || "Sem campus").toString().trim(); // trim
     const cls = classStatus(status ? r[status] : "");
     mapa[c] = mapa[c] || { concluidos:0, em_analise:0, pendentes:0 };
     if (cls === "concluido") mapa[c].concluidos++;
@@ -300,7 +314,7 @@ function plotPorMunicipio(rows) {
   }
   const map = {};
   rows.forEach(r => {
-    const m = (r[municipio] || "Sem município").toString().trim(); // trim aqui
+    const m = (r[municipio] || "Sem município").toString().trim(); // trim
     map[m] = (map[m] || 0) + 1;
   });
   const labels = Object.keys(map);
@@ -327,7 +341,7 @@ function plotAvaliador(rows) {
   }
   const map = {};
   rows.forEach(r => {
-    const a = (r[avaliador] || "Sem avaliador").toString().trim(); // trim aqui
+    const a = (r[avaliador] || "Sem avaliador").toString().trim(); // trim
     map[a] = (map[a] || 0) + 1;
   });
   const arr = Object.entries(map).map(([k,v])=>({k,v})).sort((a,b)=>b.v-a.v).slice(0,10);
@@ -353,6 +367,14 @@ function buildPendencias(rows) {
   const data = [];
 
   rows.forEach(r => {
+    const rawStatus = status ? r[status] : "";
+    const cls = classStatus(rawStatus);
+
+    // pendências só para processos não concluídos
+    if (cls === "concluido") {
+      return;
+    }
+
     const start = inicio ? parseDate(r[inicio]) : null;
     const last = ultima ? parseDate(r[ultima]) : null;
     if (!start) return;
@@ -367,7 +389,6 @@ function buildPendencias(rows) {
       isNaN(parseInt(rawMetaVal));
 
     if (isMetaVazia) {
-      const rawStatus = status ? r[status] : "";
       const sNorm = nrm(rawStatus);
       const isFinalizadoAutuado =
         sNorm.includes("finaliz") ||
@@ -389,6 +410,8 @@ function buildPendencias(rows) {
     if (dias == null) return;
 
     const falta = metaDias - dias;
+
+    // atrasados ou a até 5 dias de vencer
     if (falta <= 5) {
       data.push({
         campus: campus ? (r[campus] || "") : "",
@@ -450,13 +473,16 @@ async function initGestao() {
     fillSelect("fGestaoStatus", G_ROWS.map(r => r[status]), "Todos");
     fillSelect("fGestaoAvaliador", G_ROWS.map(r => r[avaliador]), "Todos");
 
-    document.getElementById("btnGestaoLimpar").addEventListener("click", () => {
-      ["fGestaoCampus","fGestaoMunicipio","fGestaoStatus","fGestaoAvaliador"].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = "";
+    const btn = document.getElementById("btnGestaoLimpar");
+    if (btn) {
+      btn.addEventListener("click", () => {
+        ["fGestaoCampus","fGestaoMunicipio","fGestaoStatus","fGestaoAvaliador"].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.value = "";
+        });
+        refreshGestao();
       });
-      refreshGestao();
-    });
+    }
 
     ["fGestaoCampus","fGestaoMunicipio","fGestaoStatus","fGestaoAvaliador"].forEach(id => {
       const el = document.getElementById(id);
