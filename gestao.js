@@ -290,15 +290,61 @@ function plotPorCampus(rows) {
 
   const campi = Object.keys(mapa);
 
-  Plotly.newPlot("chartGCampus", [
-    { name:"Concluídos", x: campi.map(c=>mapa[c].concluidos), y:campi, type:"bar", orientation:"h" },
-    { name:"Em análise", x: campi.map(c=>mapa[c].analise),    y:campi, type:"bar", orientation:"h" },
-    { name:"Pendentes",  x: campi.map(c=>mapa[c].pendentes),  y:campi, type:"bar", orientation:"h" }
-  ], {
-    barmode:"stack",
-    margin:{ t:10, l:180 }
+  const concl = campi.map(c => mapa[c].concluidos);
+  const anal  = campi.map(c => mapa[c].analise);
+  const pend  = campi.map(c => mapa[c].pendentes);
+
+  const data = [
+    {
+      name: "Concluídos",
+      x: concl,
+      y: campi,
+      type: "bar",
+      orientation: "h",
+      marker: { color: "#2b6cb0" }
+    },
+    {
+      name: "Em análise",
+      x: anal,
+      y: campi,
+      type: "bar",
+      orientation: "h",
+      marker: { color: "#ed8936" }
+    },
+    {
+      name: "Pendentes",
+      x: pend,
+      y: campi,
+      type: "bar",
+      orientation: "h",
+      marker: { color: "#38a169" }
+    }
+  ];
+
+  Plotly.newPlot("chartGCampus", data, {
+    barmode: "stack",
+    margin: {
+      t: 10,
+      l: 180,   // garante espaço para nomes longos
+      r: 20,
+      b: 40
+    },
+    xaxis: {
+      automargin: true,
+      showgrid: true,
+      zeroline: true,
+      ticks: "outside",
+      tickfont: { size: 12 }
+    },
+    yaxis: {
+      automargin: true,
+      tickfont: { size: 13 }
+    },
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "rgba(0,0,0,0)"
   });
 }
+
 
 function plotPorMunicipio(rows) {
   const { municipio } = G_COLS;
