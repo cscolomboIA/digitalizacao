@@ -1,8 +1,7 @@
-// gestao.js — Painel executivo IntegraCAR lendo Google Sheets
+// gestao.js — Painel executivo IntegraCAR lendo CSV local
 
 // URL CSV público da planilha (aba gid=0)
-const SHEET_CSV_URL =
-  "acompanhamento.csv";
+const SHEET_CSV_URL = "acompanhamento.csv";
 
 let G_ROWS = [];
 let G_COLS = {};
@@ -34,7 +33,12 @@ function diffDays(a, b) {
 
 // ---------- Leitura da planilha ----------
 async function loadGestaoData() {
-  const res = await fetch(SHEET_CSV_URL);
+  // adiciona um parâmetro variável para evitar cache
+  const urlComVersao = `${SHEET_CSV_URL}?v=${Date.now()}`;
+
+  const res = await fetch(urlComVersao, {
+    cache: "no-store"
+  });
   if (!res.ok) {
     console.error("Sheets fetch status:", res.status, res.statusText);
     throw new Error("Falha ao acessar a planilha (status " + res.status + ").");
@@ -89,7 +93,7 @@ function classStatus(raw) {
   if (s.includes("aprov") || s.includes("defer") || s.includes("emitido")) return "concluido";
   if (s.includes("reprov") || s.includes("indefer") || s.includes("cancel")) return "concluido";
   if (s.includes("analise") || s.includes("andamento")) return "em_analise";
-  if (s.includes("pendente") || s.includes("aguard") || s.includes("nao iniciado") || s.includes("notificacao"))
+  if (s.includes("pendente") || s.includes("aguard") || s.includes("nao iniciou") || s.includes("nao iniciado") || s.includes("notificacao"))
     return "pendente";
   return "outros";
 }
@@ -366,7 +370,7 @@ async function initGestao() {
     });
 
     const lbl = document.getElementById("lblGestaoArquivo");
-    if (lbl) lbl.textContent = "Fonte: Google Sheets — IntegraCAR";
+    if (lbl) lbl.textContent = "Fonte: IntegraCAR — acompanhamento.csv";
 
     refreshGestao();
   } catch (e) {
