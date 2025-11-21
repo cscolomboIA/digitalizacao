@@ -37,21 +37,45 @@ function diffDays(a, b) {
 
 // Normaliza nomes de municípios para forma canônica
 function normalizarMunicipio(nome) {
-  if (!nome) return nome;
+  if (!nome) return "Sem município";
   const original = nome.toString().trim();
-  const base = original
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+  const base = nrm(original); // sem acento/minúsculo
 
-  // Corrige variações de "Cachoeiro de Itapemirim" digitadas errado
-  // (ex.: "Cachoeiro de Itapemerim", etc.)
+  // Regras específicas
   if (base.includes("cachoeiro") && base.includes("itapem")) {
+    // cobre "cachoeiro de itapemirim", "cachoeiro de itapemerim" etc.
     return "Cachoeiro de Itapemirim";
   }
 
-  // aqui dá pra adicionar outras regras se forem surgindo inconsistências
+  // Aqui você pode adicionar outras normalizações específicas no futuro
+
   return original;
+}
+
+// Normaliza nomes de campus para forma canônica
+function normalizarCampus(nome) {
+  if (!nome) return "Sem campus";
+  const original = nome.toString().trim();
+  const base = nrm(original);
+
+  // mapeia variações conhecidas para o padrão
+  if (base === "alegre") return "Alegre";
+  if (base === "barra de sao francisco") return "Barra de São Francisco";
+  if (base === "cachoeiro de itapemirim" || base === "cachoeiro de itapemerim")
+    return "Cachoeiro de Itapemirim";
+  if (base === "colatina") return "Colatina";
+  if (base === "itapina") return "Itapina";
+  if (base === "linhares") return "Linhares";
+  if (base === "montanha") return "Montanha";
+  if (base === "nova venecia" || base === "nova venecia")
+    return "Nova Venécia";
+  if (base === "piuma") return "Piúma";
+  if (base === "santa teresa") return "Santa Teresa";
+  if (base === "vitoria") return "Vitória";
+  if (base === "idaf") return "Idaf";
+
+  // se não bater nenhuma regra, devolve como veio (ajustado)
+  return original || "Sem campus";
 }
 
 // ----------------------------------------------
@@ -159,7 +183,7 @@ function applyFilters(rows) {
   const { campus, municipio, status, avaliador } = G_COLS;
 
   return rows.filter(r => {
-    const rc = campus ? nrm(r[campus]) : "";
+    const rc = campus ? nrm(normalizarCampus(r[campus])) : "";
     const rm = municipio ? nrm(normalizarMunicipio(r[municipio])) : "";
     const rs = status ? nrm(r[status]) : "";
     const ra = avaliador ? nrm(r[avaliador]) : "";
@@ -339,14 +363,15 @@ function plotStatus(rows) {
   });
 }
 
-// --- Processos por Campus (barras horizontais, como Município) ---
+// --- Processos por Campus (barras horizontais, nomes normalizados) ---
 function plotPorCampus(rows) {
   const { campus } = G_COLS;
   if (!campus) return;
 
   const map = {};
   rows.forEach(r => {
-    const c = (r[campus] || "Sem campus").toString().trim();
+    const cRaw = (r[campus] || "Sem campus").toString().trim();
+    const c = normalizarCampus(cRaw);
     map[c] = (map[c] || 0) + 1;
   });
 
@@ -358,7 +383,7 @@ function plotPorCampus(rows) {
     y: labels,
     type: "bar",
     orientation: "h",
-    hovertemplate:"%{y}: %{x}<extra></extra>"
+    hovertemplate: "%{x}<extra></extra>"
   }], {
     margin:{ t:10, l:180, r:10, b:30 },
     paper_bgcolor:"rgba(0,0,0,0)",
@@ -387,7 +412,8 @@ function plotPorMunicipio(rows) {
     x: values,
     y: labels,
     type: "bar",
-    orientation: "h"
+    orientation: "h",
+    hovertemplate: "%{x}<extra></extra>"
   }], {
     margin:{ t:10, l:160 }
   });
@@ -412,7 +438,8 @@ function plotAvaliador(rows) {
     x: arr.map(x=>x.v),
     y: arr.map(x=>x.k),
     type: "bar",
-    orientation: "h"
+    orientation: "h",
+    hovertemplate: "%{x}<extra></extra>"
   }], {
     margin:{ t:10, l:200 }
   });
@@ -450,7 +477,7 @@ function buildPendencias(rows) {
 
     if (falta <= 5) {
       data.push({
-        campus: campus ? r[campus] : "",
+        campus: campus ? normalizarCampus(r[campus]) : "",
         municipio: municipio ? normalizarMunicipio(r[municipio]) : "",
         status: r[status],
         dias,
@@ -499,7 +526,7 @@ async function initGestao() {
     G_ROWS = await loadGestaoData();
     G_COLS = detectColumns(G_ROWS);
 
-    fillSelect("fGestaoCampus", G_ROWS.map(r => r[G_COLS.campus]), "Todos");
+    fillSelect("fGestaoCampus", G_ROWS.map(r => normalizarCampus(r[G_COLS.campus])), "Todos");
     fillSelect("fGestaoMunicipio", G_ROWS.map(r => normalizarMunicipio(r[G_COLS.municipio])), "Todos");
     fillSelect("fGestaoStatus", G_ROWS.map(r => r[G_COLS.status]), "Todos");
     fillSelect("fGestaoAvaliador", G_ROWS.map(r => r[G_COLS.avaliador]), "Todos");
