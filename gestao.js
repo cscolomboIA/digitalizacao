@@ -73,7 +73,7 @@ function normalizarCampus(nome) {
   return original || "Sem campus";
 }
 
-// Normaliza nomes de avaliadores
+// Normaliza nomes de avaliadores (para agrupamento)
 function normalizarAvaliador(nome) {
   if (!nome) return "Sem avaliador";
   const original = nome.toString().trim();
@@ -86,6 +86,16 @@ function normalizarAvaliador(nome) {
 
   // aqui podemos adicionar outros ajustes no futuro
   return original;
+}
+
+// Mostra apenas primeiro + último nome (para label no gráfico)
+function resumirNomeAvaliador(nome) {
+  if (!nome) return "";
+  const partes = nome.toString().trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 1) return partes[0];
+  const primeiro = partes[0];
+  const ultimo = partes[partes.length - 1];
+  return `${primeiro} ${ultimo}`;
 }
 
 // ----------------------------------------------
@@ -373,7 +383,7 @@ function plotStatus(rows) {
   });
 }
 
-// --- Processos por Campus (barras horizontais, nomes normalizados) ---
+// --- Processos por Campus (barras horizontais, nomes normalizados, tooltip só número) ---
 function plotPorCampus(rows) {
   const { campus } = G_COLS;
   if (!campus) return;
@@ -393,6 +403,7 @@ function plotPorCampus(rows) {
     y: labels,
     type: "bar",
     orientation: "h",
+    hoverinfo: "x",
     hovertemplate: "%{x}<extra></extra>"
   }], {
     margin:{ t:10, l:180, r:10, b:30 },
@@ -404,6 +415,7 @@ function plotPorCampus(rows) {
   });
 }
 
+// --- Processos por Município (tooltip só número) ---
 function plotPorMunicipio(rows) {
   const { municipio } = G_COLS;
   if (!municipio) return;
@@ -423,12 +435,15 @@ function plotPorMunicipio(rows) {
     y: labels,
     type: "bar",
     orientation: "h",
+    hoverinfo: "x",
     hovertemplate: "%{x}<extra></extra>"
   }], {
     margin:{ t:10, l:160 }
   });
 }
 
+// --- Desempenho por Avaliador (top 10) ---
+// agrupa por avaliador normalizado, mas mostra só primeiro + último nome
 function plotAvaliador(rows) {
   const { avaliador } = G_COLS;
   if (!avaliador) return;
@@ -436,8 +451,8 @@ function plotAvaliador(rows) {
   const map = {};
   rows.forEach(r => {
     const aRaw = (r[avaliador] || "Sem avaliador").toString().trim();
-    const a = normalizarAvaliador(aRaw);
-    map[a] = (map[a] || 0) + 1;
+    const aNorm = normalizarAvaliador(aRaw);
+    map[aNorm] = (map[aNorm] || 0) + 1;
   });
 
   const arr = Object.entries(map)
@@ -445,11 +460,15 @@ function plotAvaliador(rows) {
     .sort((a,b) => b.v - a.v)
     .slice(0,10);
 
+  const valores = arr.map(x => x.v);
+  const labelsCurta = arr.map(x => resumirNomeAvaliador(x.k));
+
   Plotly.newPlot("chartGAvaliador", [{
-    x: arr.map(x=>x.v),
-    y: arr.map(x=>x.k),
+    x: valores,
+    y: labelsCurta,
     type: "bar",
     orientation: "h",
+    hoverinfo: "x",
     hovertemplate: "%{x}<extra></extra>"
   }], {
     margin:{ t:10, l:200 }
