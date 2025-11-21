@@ -83,7 +83,7 @@ function detectColumns(rows) {
   const avaliador = find(h => nrm(h).includes("aval") || nrm(h).includes("tecnico"));
   const codigo = find(h => nrm(h).includes("processo") || nrm(h).includes("edoc"));
 
-  // *** ATUALIZADO PARA SUA PLANILHA ***
+  // datas
   const inicio = find(h =>
     nrm(h).includes("criacao") ||
     nrm(h).includes("criação") ||
@@ -97,7 +97,7 @@ function detectColumns(rows) {
     nrm(h).includes("atualiz")
   );
 
-  // META – sua planilha não tinha essa coluna antes
+  // meta / prazo
   const meta = find(h =>
     nrm(h).includes("meta") ||
     nrm(h).includes("prazo") ||
@@ -188,11 +188,10 @@ function updateKPIs(rows) {
     const start = inicio ? parseDate(r[inicio]) : null;
     const last  = ultima ? parseDate(r[ultima]) : null;
 
-    if (!start) return; 
+    if (!start) return;
 
     const ref  = last || new Date();
     const dias = diffDays(start, ref);
-
     if (dias == null) return;
 
     const rawMetaVal = meta ? r[meta] : null;
@@ -272,79 +271,35 @@ function plotStatus(rows) {
   });
 }
 
+// *** NOVA VERSÃO: igual ao gráfico de Município, uma barra por campus ***
 function plotPorCampus(rows) {
-  const { campus, status } = G_COLS;
+  const { campus } = G_COLS;
   if (!campus) return;
 
-  const mapa = {};
-
+  const map = {};
   rows.forEach(r => {
     const c = (r[campus] || "Sem campus").toString().trim();
-    const cls = classStatus(r[status]);
-
-    if (!mapa[c]) mapa[c] = { concluidos:0, analise:0, pendentes:0 };
-    if (cls === "concluido") mapa[c].concluidos++;
-    if (cls === "em_analise") mapa[c].analise++;
-    if (cls === "pendente") mapa[c].pendentes++;
+    map[c] = (map[c] || 0) + 1;
   });
 
-  const campi = Object.keys(mapa);
+  const labels = Object.keys(map);
+  const values = labels.map(k => map[k]);
 
-  const concl = campi.map(c => mapa[c].concluidos);
-  const anal  = campi.map(c => mapa[c].analise);
-  const pend  = campi.map(c => mapa[c].pendentes);
-
-  const data = [
-    {
-      name: "Concluídos",
-      x: concl,
-      y: campi,
-      type: "bar",
-      orientation: "h",
-      marker: { color: "#2b6cb0" }
-    },
-    {
-      name: "Em análise",
-      x: anal,
-      y: campi,
-      type: "bar",
-      orientation: "h",
-      marker: { color: "#ed8936" }
-    },
-    {
-      name: "Pendentes",
-      x: pend,
-      y: campi,
-      type: "bar",
-      orientation: "h",
-      marker: { color: "#38a169" }
-    }
-  ];
-
-  Plotly.newPlot("chartGCampus", data, {
-    barmode: "stack",
-    margin: {
-      t: 10,
-      l: 180,   // garante espaço para nomes longos
-      r: 20,
-      b: 40
-    },
-    xaxis: {
-      automargin: true,
-      showgrid: true,
-      zeroline: true,
-      ticks: "outside",
-      tickfont: { size: 12 }
-    },
-    yaxis: {
-      automargin: true,
-      tickfont: { size: 13 }
-    },
-    paper_bgcolor: "rgba(0,0,0,0)",
-    plot_bgcolor: "rgba(0,0,0,0)"
+  Plotly.newPlot("chartGCampus", [{
+    x: values,
+    y: labels,
+    type: "bar",
+    orientation: "h",
+    hovertemplate:"%{y}: %{x}<extra></extra>"
+  }], {
+    margin:{ t:10, l:180, r:10, b:30 },
+    paper_bgcolor:"rgba(0,0,0,0)",
+    plot_bgcolor:"rgba(0,0,0,0)"
+  }, {
+    displayModeBar:false,
+    responsive:true
   });
 }
-
 
 function plotPorMunicipio(rows) {
   const { municipio } = G_COLS;
@@ -480,15 +435,23 @@ async function initGestao() {
     fillSelect("fGestaoStatus", G_ROWS.map(r => r[G_COLS.status]), "Todos");
     fillSelect("fGestaoAvaliador", G_ROWS.map(r => r[G_COLS.avaliador]), "Todos");
 
-    document.getElementById("btnGestaoLimpar")
-      ?.addEventListener("click", () => {
+    const btn = document.getElementById("btnGestaoLimpar");
+    if (btn) {
+      btn.addEventListener("click", () => {
         ["fGestaoCampus","fGestaoMunicipio","fGestaoStatus","fGestaoAvaliador"]
-          .forEach(id => document.getElementById(id).value = "");
+          .forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = "";
+          });
         refreshGestao();
       });
+    }
 
     ["fGestaoCampus","fGestaoMunicipio","fGestaoStatus","fGestaoAvaliador"]
-      .forEach(id => document.getElementById(id)?.addEventListener("change", refreshGestao));
+      .forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("change", refreshGestao);
+      });
 
     refreshGestao();
   } catch (err) {
