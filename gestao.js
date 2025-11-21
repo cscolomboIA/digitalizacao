@@ -261,15 +261,28 @@ function plotStatus(rows) {
   const labels = Object.keys(map);
   const values = labels.map(k => map[k]);
 
+  // calcula automaticamente a margem necessária
+  const maxLabelLength = Math.max(...labels.map(l => l.length));
+  const leftMargin = Math.min(400, Math.max(120, maxLabelLength * 6));
+
   Plotly.newPlot("chartGStatus", [{
     x: values,
     y: labels,
     type: "bar",
-    orientation: "h"
+    orientation: "h",
+    hovertemplate:"%{y}: %{x}<extra></extra>"
   }], {
-    margin: { t: 10, l: 140 }
+    margin: { t: 10, l: leftMargin, r: 20, b: 30 },
+    paper_bgcolor:"rgba(0,0,0,0)",
+    plot_bgcolor:"rgba(0,0,0,0)",
+    yaxis: { automargin: true }
+  }, {
+    displayModeBar:false,
+    responsive:true
   });
 }
+
+
 
 // *** NOVA VERSÃO: igual ao gráfico de Município, uma barra por campus ***
 function plotPorCampus(rows) {
