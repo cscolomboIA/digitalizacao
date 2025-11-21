@@ -153,7 +153,112 @@ function updateKPIs(rows) {
   let inSLA = 0, outSLA = 0;
 
   // card "Processos sem meta explícita"
+  let semMetaTotal = 0;function updateKPIs(rows) {
+  const { status, inicio, ultima, meta } = G_COLS;
+  const total = rows.length;
+  let concluidos = 0, emAnalise = 0, pendentes = 0;
+  let inSLA = 0, outSLA = 0;
+
+  // card "Processos sem meta explícita"
   let semMetaTotal = 0;
+  let semMetaDentro = 0;
+  let semMetaFora = 0;
+
+  // card "Concluídos fora do prazo"
+  let concluidosForaPrazo = 0;
+
+  rows.forEach(r => {
+    const rawStatus = status ? r[status] : "";
+    const cls = classStatus(rawStatus);
+
+    // contadores básicos de status
+    if (cls === "concluido") concluidos++;
+    else if (cls === "em_analise") emAnalise++;
+    else if (cls === "pendente") pendentes++;
+
+    const start = inicio ? parseDate(r[inicio]) : null;
+    const last  = ultima ? parseDate(r[ultima]) : null;
+    if (!start) return; // sem início, não entra no SLA
+
+    const ref  = last || new Date();
+    const dias = diffDays(start, ref);
+    if (dias == null) return;
+
+    // --- META / SLA ---
+    const rawMetaVal = meta ? r[meta] : null;
+    let   metaDias   = Number.parseInt(rawMetaVal);
+    const sNorm      = nrm(rawStatus);
+
+    const isFinalizadoAutuado =
+      sNorm.includes("finaliz") || // finalizado
+      sNorm.includes("autuad");    // autuado
+
+    if (Number.isNaN(metaDias)) {
+      // meta vazia / inválida
+      semMetaTotal++;
+
+      if (isFinalizadoAutuado) {
+        // finalizado/autuado sem meta -> dentro do prazo
+        inSLA++;
+        semMetaDentro++;
+        return;
+      } else {
+        // não finalizado/autuado -> meta padrão 30 dias
+        metaDias = 30;
+      }
+    }
+
+    // a partir daqui SEMPRE temos um metaDias numérico
+    if (dias <= metaDias) {
+      inSLA++;
+      if (Number.isNaN(Number.parseInt(rawMetaVal))) {
+        semMetaDentro++;
+      }
+    } else {
+      outSLA++;
+      if (Number.isNaN(Number.parseInt(rawMetaVal))) {
+        semMetaFora++;
+      }
+      if (cls === "concluido") {
+        concluidosForaPrazo++;
+      }
+    }
+  });
+
+  const sla = (inSLA + outSLA) > 0
+    ? Math.round((inSLA * 100) / (inSLA + outSLA))
+    : null;
+
+  // KPIs principais
+  document.getElementById("kpiGTotal").textContent       = total;
+  document.getElementById("kpiGConcluidos").textContent  = concluidos;
+  document.getElementById("kpiGEmAnalise").textContent   = emAnalise;
+  document.getElementById("kpiGPendentes").textContent   = pendentes;
+  document.getElementById("kpiGSLA").textContent         = sla == null ? "–" : sla + "%";
+
+  // card de processos sem meta explícita
+  const semMetaEl = document.getElementById("kpiGSemMeta");
+  if (semMetaEl) {
+    if (semMetaTotal === 0) {
+      semMetaEl.textContent = "Processos sem meta explícita: 0";
+    } else {
+      semMetaEl.textContent =
+        `Processos sem meta explícita: ${semMetaTotal} ` +
+        `(${semMetaDentro} dentro / ${semMetaFora} fora do prazo, usando meta padrão de 30 dias)`;
+    }
+  }
+
+  // card: concluídos fora do prazo
+  const conclForaEl = document.getElementById("kpiGConcluidosForaPrazo");
+  if (conclForaEl) {
+    conclForaEl.textContent =
+      `Concluídos fora do prazo: ${concluidosForaPrazo}`;
+  }
+
+  // debug opcional no console
+  console.log("SLA debug:", { total, inSLA, outSLA });
+}
+
   let semMetaDentro = 0;
   let semMetaFora = 0;
 
