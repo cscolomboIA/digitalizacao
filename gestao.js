@@ -1,17 +1,21 @@
-// gestao.js — Painel executivo IntegraCAR lendo CSV local
+// gestao.js — Painel executivo IntegraCAR
 
-// URL CSV da planilha
+// ----------------------------------------------
+// CONFIGURAÇÃO DO CSV LOCAL
+// ----------------------------------------------
 const SHEET_CSV_URL = "acompanhamento.csv";
 
 let G_ROWS = [];
 let G_COLS = {};
 let pendenciasTable = null;
 
-// ---------- Utilidades ----------
+// ----------------------------------------------
+// UTILIDADES
+// ----------------------------------------------
 function nrm(str) {
   return (str || "")
     .toString()
-    .trim()                     // remove espaços antes/depois
+    .trim()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
@@ -21,7 +25,7 @@ function nrm(str) {
 function parseDate(v) {
   if (!v) return null;
   if (v instanceof Date && !isNaN(v)) return v;
-  const s = String(v).replace(/(\d{2})\/(\d{2})\/(\d{4})/, "$3-$2-$1"); // dd/mm/aaaa -> aaaa-mm-dd
+  const s = String(v).replace(/(\d{2})\/(\d{2})\/(\d{4})/, "$3-$2-$1");
   const d = new Date(s);
   return isNaN(d) ? null : d;
 }
@@ -31,22 +35,18 @@ function diffDays(a, b) {
   return Math.floor((b - a) / (1000 * 60 * 60 * 24));
 }
 
-// ---------- Leitura da planilha ----------
+// ----------------------------------------------
+// LEITURA DO CSV
+// ----------------------------------------------
 async function loadGestaoData() {
-  // evita cache adicionando timestamp à URL
   const urlComVersao = `${SHEET_CSV_URL}?v=${Date.now()}`;
 
-  const res = await fetch(urlComVersao, {
-    cache: "no-store"
-  });
-  if (!res.ok) {
-    console.error("Sheets fetch status:", res.status, res.statusText);
-    throw new Error("Falha ao acessar a planilha (status " + res.status + ").");
-  }
+  const res = await fetch(urlComVersao, { cache: "no-store" });
+  if (!res.ok) throw new Error("Falha ao carregar acompanhamento.csv");
 
   const text = await res.text();
   if (!text || text.trim().length === 0) {
-    throw new Error("CSV retornou vazio. Confira o arquivo acompanhamento.csv.");
+    throw new Error("CSV retornou vazio.");
   }
 
   return new Promise((resolve) => {
@@ -54,7 +54,6 @@ async function loadGestaoData() {
       header: true,
       skipEmptyLines: true,
       complete: (result) => {
-        // limpa espaços de cabeçalhos e valores string
         const cleaned = result.data.map(row => {
           const obj = {};
           for (const k in row) {
@@ -64,51 +63,69 @@ async function loadGestaoData() {
           }
           return obj;
         });
-        console.log("Linhas carregadas do CSV:", cleaned.length);
+        console.log("Linhas carregadas:", cleaned.length);
         resolve(cleaned);
       }
     });
   });
 }
 
-// ---------- Detecção de colunas ----------
+// ----------------------------------------------
+// DETECÇÃO DE COLUNAS — AJUSTADO PARA SUA PLANILHA
+// ----------------------------------------------
 function detectColumns(rows) {
-  const sample = rows[0] || {};
-  const headers = Object.keys(sample);
-  const find = (fn) => headers.find(fn);
+  const headers = Object.keys(rows[0] || {});
+  const find = fn => headers.find(fn);
 
   const campus = find(h => nrm(h).includes("campus"));
   const municipio = find(h => nrm(h).includes("munic"));
   const status = find(h => nrm(h).includes("status"));
   const avaliador = find(h => nrm(h).includes("aval") || nrm(h).includes("tecnico"));
-  const ponto = find(h => nrm(h).includes("ponto") && nrm(h).includes("idaf"));
-  const inicio = find(h => nrm(h).includes("inicio") || nrm(h).includes("data analise") || nrm(h).includes("data abertura"));
-  const ultima = find(h => nrm(h).includes("ultima") || nrm(h).includes("atualiz"));
-  const meta = find(h => nrm(h).includes("meta") && (nrm(h).includes("prazo") || nrm(h).includes("sla")));
-  const codigo = find(h =>
-    nrm(h).includes("processo") ||
-    nrm(h).includes("edocs") ||
-    nrm(h).includes("e-doc") ||
-    nrm(h).includes("empreend")
+  const codigo = find(h => nrm(h).includes("processo") || nrm(h).includes("edoc"));
+
+  // *** ATUALIZADO PARA SUA PLANILHA ***
+  const inicio = find(h =>
+    nrm(h).includes("criacao") ||
+    nrm(h).includes("criação") ||
+    nrm(h).includes("abertura") ||
+    nrm(h).includes("inicio") ||
+    nrm(h).includes("analise")
   );
 
-  console.log("Colunas detectadas:", { campus, municipio, status, avaliador, ponto, inicio, ultima, meta, codigo });
-  return { campus, municipio, status, avaliador, ponto, inicio, ultima, meta, codigo };
+  const ultima = find(h =>
+    nrm(h).includes("ultima") ||
+    nrm(h).includes("atualiz")
+  );
+
+  // META – sua planilha não tinha essa coluna antes
+  const meta = find(h =>
+    nrm(h).includes("meta") ||
+    nrm(h).includes("prazo") ||
+    nrm(h).includes("sla")
+  );
+
+  console.log("Colunas detectadas:", { campus, municipio, status, avaliador, inicio, ultima, meta, codigo });
+
+  return { campus, municipio, status, avaliador, inicio, ultima, meta, codigo };
 }
 
-// ---------- Classificação de status ----------
+// ----------------------------------------------
+// CLASSIFICAÇÃO DE STATUS
+// ----------------------------------------------
 function classStatus(raw) {
   const s = nrm(raw);
   if (!s) return "indefinido";
   if (s.includes("aprov") || s.includes("defer") || s.includes("emitido")) return "concluido";
   if (s.includes("reprov") || s.includes("indefer") || s.includes("cancel")) return "concluido";
   if (s.includes("analise") || s.includes("andamento")) return "em_analise";
-  if (s.includes("pendente") || s.includes("aguard") || s.includes("nao iniciado") || s.includes("notificacao"))
+  if (s.includes("pend") || s.includes("aguard") || s.includes("nao iniciado") || s.includes("notificacao"))
     return "pendente";
   return "outros";
 }
 
-// ---------- Filtros ----------
+// ----------------------------------------------
+// FILTROS
+// ----------------------------------------------
 function getFilter(id) {
   const el = document.getElementById(id);
   return el ? nrm(el.value) : "";
@@ -119,6 +136,7 @@ function applyFilters(rows) {
   const m = getFilter("fGestaoMunicipio");
   const s = getFilter("fGestaoStatus");
   const a = getFilter("fGestaoAvaliador");
+
   const { campus, municipio, status, avaliador } = G_COLS;
 
   return rows.filter(r => {
@@ -126,6 +144,7 @@ function applyFilters(rows) {
     const rm = municipio ? nrm(r[municipio]) : "";
     const rs = status ? nrm(r[status]) : "";
     const ra = avaliador ? nrm(r[avaliador]) : "";
+
     return (!c || rc === c) &&
            (!m || rm === m) &&
            (!s || rs === s) &&
@@ -136,85 +155,73 @@ function applyFilters(rows) {
 function fillSelect(id, values, labelAll) {
   const el = document.getElementById(id);
   if (!el) return;
-  const uniq = Array.from(new Set(
-    values
-      .filter(Boolean)
-      .map(v => v.toString().trim())   // evita "Colatina " ≠ "Colatina"
-  )).sort();
+  const uniq = Array.from(new Set(values.filter(Boolean).map(v => v.toString().trim()))).sort();
   el.innerHTML = `<option value="">${labelAll}</option>` +
     uniq.map(v => `<option value="${v}">${v}</option>`).join("");
 }
 
-// ---------- KPIs & SLA ----------
+// ----------------------------------------------
+// KPIs + SLA
+// ----------------------------------------------
 function updateKPIs(rows) {
   const { status, inicio, ultima, meta } = G_COLS;
-  const total = rows.length;
-  let concluidos = 0, emAnalise = 0, pendentes = 0;
+
+  let total = 0, concluidos = 0, emAnalise = 0, pendentes = 0;
   let inSLA = 0, outSLA = 0;
 
-  // card "Processos sem meta explícita"
   let semMetaTotal = 0;
   let semMetaDentro = 0;
   let semMetaFora = 0;
 
-  // card "Concluídos fora do prazo"
   let concluidosForaPrazo = 0;
 
   rows.forEach(r => {
+    total++;
+
     const rawStatus = status ? r[status] : "";
     const cls = classStatus(rawStatus);
 
-    // contadores básicos de status
     if (cls === "concluido") concluidos++;
-    else if (cls === "em_analise") emAnalise++;
-    else if (cls === "pendente") pendentes++;
+    if (cls === "em_analise") emAnalise++;
+    if (cls === "pendente") pendentes++;
 
     const start = inicio ? parseDate(r[inicio]) : null;
     const last  = ultima ? parseDate(r[ultima]) : null;
-    if (!start) return; // sem início, não entra no SLA
+
+    if (!start) return; 
 
     const ref  = last || new Date();
     const dias = diffDays(start, ref);
+
     if (dias == null) return;
 
-    // --- META / SLA ---
     const rawMetaVal = meta ? r[meta] : null;
     let metaDias = Number.parseInt(rawMetaVal);
+
     const sNorm = nrm(rawStatus);
+    const isFinalizadoAutuado = sNorm.includes("finaliz") || sNorm.includes("autuad");
 
-    const isFinalizadoAutuado =
-      sNorm.includes("finaliz") || // finalizado
-      sNorm.includes("autuad");    // autuado
+    const metaVazia = Number.isNaN(metaDias);
 
-    if (Number.isNaN(metaDias)) {
-      // meta vazia / inválida
+    if (metaVazia) {
       semMetaTotal++;
 
       if (isFinalizadoAutuado) {
-        // finalizado/autuado sem meta -> dentro do prazo
         inSLA++;
         semMetaDentro++;
         return;
       } else {
-        // não finalizado/autuado -> meta padrão 30 dias
         metaDias = 30;
       }
     }
 
-    // a partir daqui SEMPRE temos um metaDias numérico
     if (dias <= metaDias) {
       inSLA++;
-      if (Number.isNaN(Number.parseInt(rawMetaVal))) {
-        semMetaDentro++;
-      }
+      if (metaVazia) semMetaDentro++;
     } else {
       outSLA++;
-      if (Number.isNaN(Number.parseInt(rawMetaVal))) {
-        semMetaFora++;
-      }
-      if (cls === "concluido") {
-        concluidosForaPrazo++;
-      }
+      if (metaVazia) semMetaFora++;
+      if (cls === "concluido") concluidosForaPrazo++;
     }
   });
 
@@ -222,43 +229,36 @@ function updateKPIs(rows) {
     ? Math.round((inSLA * 100) / (inSLA + outSLA))
     : null;
 
-  // KPIs principais
-  document.getElementById("kpiGTotal").textContent       = total;
-  document.getElementById("kpiGConcluidos").textContent  = concluidos;
-  document.getElementById("kpiGEmAnalise").textContent   = emAnalise;
-  document.getElementById("kpiGPendentes").textContent   = pendentes;
-  document.getElementById("kpiGSLA").textContent         = sla == null ? "–" : sla + "%";
+  document.getElementById("kpiGTotal").textContent = total;
+  document.getElementById("kpiGConcluidos").textContent = concluidos;
+  document.getElementById("kpiGEmAnalise").textContent = emAnalise;
+  document.getElementById("kpiGPendentes").textContent = pendentes;
+  document.getElementById("kpiGSLA").textContent = sla == null ? "–" : sla + "%";
 
-  // card de processos sem meta explícita
   const semMetaEl = document.getElementById("kpiGSemMeta");
   if (semMetaEl) {
-    if (semMetaTotal === 0) {
-      semMetaEl.textContent = "Processos sem meta explícita: 0";
-    } else {
-      semMetaEl.textContent =
-        `Processos sem meta explícita: ${semMetaTotal} ` +
-        `(${semMetaDentro} dentro / ${semMetaFora} fora do prazo, usando meta padrão de 30 dias)`;
-    }
+    semMetaEl.textContent =
+      `Processos sem meta explícita: ${semMetaTotal} (${semMetaDentro} dentro / ${semMetaFora} fora do prazo, meta padrão 30 dias)`;
   }
 
-  // card: concluídos fora do prazo
   const conclForaEl = document.getElementById("kpiGConcluidosForaPrazo");
-  if (conclForaEl) {
-    conclForaEl.textContent =
-      `Concluídos fora do prazo: ${concluidosForaPrazo}`;
-  }
+  if (conclForaEl) conclForaEl.textContent = `Concluídos fora do prazo: ${concluidosForaPrazo}`;
 
-  console.log("SLA debug:", { total, inSLA, outSLA });
+  console.log("SLA DEBUG:", { total, inSLA, outSLA });
 }
 
-// ---------- Gráficos ----------
+// ----------------------------------------------
+// GRÁFICOS
+// ----------------------------------------------
 function plotStatus(rows) {
   const { status } = G_COLS;
   const map = {};
+
   rows.forEach(r => {
     const rot = status ? (r[status] || "Sem status") : "Sem status";
     map[rot] = (map[rot] || 0) + 1;
   });
+
   const labels = Object.keys(map);
   const values = labels.map(k => map[k]);
 
@@ -266,164 +266,127 @@ function plotStatus(rows) {
     x: values,
     y: labels,
     type: "bar",
-    orientation: "h",
-    hovertemplate: "%{y}: %{x}<extra></extra>"
+    orientation: "h"
   }], {
-    margin: { t: 10, l: 160, r: 10, b: 30 },
-    paper_bgcolor: "rgba(0,0,0,0)",
-    plot_bgcolor: "rgba(0,0,0,0)"
-  }, { displayModeBar:false, responsive:true });
+    margin: { t: 10, l: 140 }
+  });
 }
 
 function plotPorCampus(rows) {
   const { campus, status } = G_COLS;
-  if (!campus) {
-    document.getElementById("chartGCampus").innerHTML = "Coluna de Campus não encontrada.";
-    return;
-  }
+  if (!campus) return;
+
   const mapa = {};
+
   rows.forEach(r => {
-    const c = (r[campus] || "Sem campus").toString().trim(); // trim
-    const cls = classStatus(status ? r[status] : "");
-    mapa[c] = mapa[c] || { concluidos:0, em_analise:0, pendentes:0 };
+    const c = (r[campus] || "Sem campus").toString().trim();
+    const cls = classStatus(r[status]);
+
+    if (!mapa[c]) mapa[c] = { concluidos:0, analise:0, pendentes:0 };
     if (cls === "concluido") mapa[c].concluidos++;
-    else if (cls === "em_analise") mapa[c].em_analise++;
-    else if (cls === "pendente") mapa[c].pendentes++;
+    if (cls === "em_analise") mapa[c].analise++;
+    if (cls === "pendente") mapa[c].pendentes++;
   });
 
   const campi = Object.keys(mapa);
-  const mk = k => campi.map(c => mapa[c][k]);
 
-  const data = [
-    { name:"Concluídos", x: mk("concluidos"), y: campi, type:"bar", orientation:"h" },
-    { name:"Em análise", x: mk("em_analise"), y: campi, type:"bar", orientation:"h" },
-    { name:"Pendentes", x: mk("pendentes"), y: campi, type:"bar", orientation:"h" }
-  ];
-
-  Plotly.newPlot("chartGCampus", data, {
+  Plotly.newPlot("chartGCampus", [
+    { name:"Concluídos", x: campi.map(c=>mapa[c].concluidos), y:campi, type:"bar", orientation:"h" },
+    { name:"Em análise", x: campi.map(c=>mapa[c].analise),    y:campi, type:"bar", orientation:"h" },
+    { name:"Pendentes",  x: campi.map(c=>mapa[c].pendentes),  y:campi, type:"bar", orientation:"h" }
+  ], {
     barmode:"stack",
-    margin:{t:10,l:160,r:10,b:30},
-    legend:{orientation:"h",y:-0.2},
-    paper_bgcolor:"rgba(0,0,0,0)",
-    plot_bgcolor:"rgba(0,0,0,0)"
-  }, {displayModeBar:false,responsive:true});
+    margin:{ t:10, l:180 }
+  });
 }
 
 function plotPorMunicipio(rows) {
   const { municipio } = G_COLS;
-  if (!municipio) {
-    document.getElementById("chartGMunicipio").innerHTML = "Coluna de Município não encontrada.";
-    return;
-  }
+  if (!municipio) return;
+
   const map = {};
   rows.forEach(r => {
-    const m = (r[municipio] || "Sem município").toString().trim(); // trim
+    const m = (r[municipio] || "Sem município").toString().trim();
     map[m] = (map[m] || 0) + 1;
   });
+
   const labels = Object.keys(map);
   const values = labels.map(k => map[k]);
 
   Plotly.newPlot("chartGMunicipio", [{
     x: values,
     y: labels,
-    type:"bar",
-    orientation:"h",
-    hovertemplate:"%{y}: %{x}<extra></extra>"
-  }],{
-    margin:{t:10,l:180,r:10,b:30},
-    paper_bgcolor:"rgba(0,0,0,0)",
-    plot_bgcolor:"rgba(0,0,0,0)"
-  },{displayModeBar:false,responsive:true});
+    type: "bar",
+    orientation: "h"
+  }], {
+    margin:{ t:10, l:160 }
+  });
 }
 
 function plotAvaliador(rows) {
   const { avaliador } = G_COLS;
-  if (!avaliador) {
-    document.getElementById("chartGAvaliador").innerHTML = "Coluna de Avaliador não encontrada.";
-    return;
-  }
+  if (!avaliador) return;
+
   const map = {};
   rows.forEach(r => {
-    const a = (r[avaliador] || "Sem avaliador").toString().trim(); // trim
+    const a = (r[avaliador] || "Sem avaliador").toString().trim();
     map[a] = (map[a] || 0) + 1;
   });
-  const arr = Object.entries(map).map(([k,v])=>({k,v})).sort((a,b)=>b.v-a.v).slice(0,10);
-  const labels = arr.map(x=>x.k);
-  const values = arr.map(x=>x.v);
 
-  Plotly.newPlot("chartGAvaliador",[{
-    x: values,
-    y: labels,
-    type:"bar",
-    orientation:"h",
-    hovertemplate:"%{y}: %{x}<extra></extra>"
-  }],{
-    margin:{t:10,l:200,r:10,b:30},
-    paper_bgcolor:"rgba(0,0,0,0)",
-    plot_bgcolor:"rgba(0,0,0,0)"
-  },{displayModeBar:false,responsive:true});
+  const arr = Object.entries(map)
+    .map(([k,v]) => ({k,v}))
+    .sort((a,b) => b.v - a.v)
+    .slice(0,10);
+
+  Plotly.newPlot("chartGAvaliador", [{
+    x: arr.map(x=>x.v),
+    y: arr.map(x=>x.k),
+    type: "bar",
+    orientation: "h"
+  }], {
+    margin:{ t:10, l:200 }
+  });
 }
 
-// ---------- Pendências ----------
+// ----------------------------------------------
+// PENDÊNCIAS CRÍTICAS
+// ----------------------------------------------
 function buildPendencias(rows) {
   const { campus, municipio, status, inicio, ultima, meta, avaliador, codigo } = G_COLS;
+
   const data = [];
 
   rows.forEach(r => {
-    const rawStatus = status ? r[status] : "";
-    const cls = classStatus(rawStatus);
-
-    // pendências só para processos não concluídos
-    if (cls === "concluido") {
-      return;
-    }
+    const cls = classStatus(r[status]);
+    if (cls === "concluido") return;
 
     const start = inicio ? parseDate(r[inicio]) : null;
-    const last = ultima ? parseDate(r[ultima]) : null;
     if (!start) return;
 
-    const rawMetaVal = meta ? r[meta] : null;
-    const parsedMeta = rawMetaVal != null ? parseInt(rawMetaVal) : null;
-    let metaDias = meta ? (parsedMeta || null) : null;
-
-    const isMetaVazia =
-      rawMetaVal == null ||
-      rawMetaVal.toString().trim() === "" ||
-      isNaN(parseInt(rawMetaVal));
-
-    if (isMetaVazia) {
-      const sNorm = nrm(rawStatus);
-      const isFinalizadoAutuado =
-        sNorm.includes("finaliz") ||
-        sNorm.includes("autuad");
-
-      if (isFinalizadoAutuado) {
-        // finalizado/autuado sem meta -> não é pendência
-        return;
-      } else {
-        // não finalizado/autuado sem meta -> meta padrão 30 dias
-        metaDias = 30;
-      }
-    }
-
-    if (!metaDias) return;
-
+    const last = ultima ? parseDate(r[ultima]) : null;
     const ref = last || new Date();
     const dias = diffDays(start, ref);
-    if (dias == null) return;
+
+    const rawMetaVal = meta ? r[meta] : null;
+    let metaDias = Number.parseInt(rawMetaVal);
+
+    const metaVazia = Number.isNaN(metaDias);
+
+    if (metaVazia) metaDias = 30;
+
+    if (dias == null || !metaDias) return;
 
     const falta = metaDias - dias;
 
-    // atrasados ou a até 5 dias de vencer
     if (falta <= 5) {
       data.push({
-        campus: campus ? (r[campus] || "") : "",
-        municipio: municipio ? (r[municipio] || "") : "",
-        status: status ? (r[status] || "") : "",
+        campus: campus ? r[campus] : "",
+        municipio: municipio ? r[municipio] : "",
+        status: r[status],
         dias,
         meta: metaDias,
-        avaliador: avaliador ? (r[avaliador] || "") : "",
-        codigo: codigo ? (r[codigo] || "") : ""
+        avaliador: r[avaliador] || "",
+        codigo: r[codigo] || ""
       });
     }
   });
@@ -444,15 +407,13 @@ function buildPendencias(rows) {
       { data:"avaliador" },
       { data:"codigo" }
     ],
-    pageLength: 10,
-    order: [[3,"desc"]],
-    language: {
-      url: "https://cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json"
-    }
+    pageLength: 10
   });
 }
 
-// ---------- Orquestração ----------
+// ----------------------------------------------
+// INICIALIZAÇÃO
+// ----------------------------------------------
 function refreshGestao() {
   const filtered = applyFilters(G_ROWS);
   updateKPIs(filtered);
@@ -466,39 +427,27 @@ function refreshGestao() {
 async function initGestao() {
   try {
     G_ROWS = await loadGestaoData();
-    if (!G_ROWS.length) throw new Error("Planilha vazia.");
-
     G_COLS = detectColumns(G_ROWS);
 
-    const { campus, municipio, status, avaliador } = G_COLS;
-    fillSelect("fGestaoCampus", G_ROWS.map(r => r[campus]), "Todos");
-    fillSelect("fGestaoMunicipio", G_ROWS.map(r => r[municipio]), "Todos");
-    fillSelect("fGestaoStatus", G_ROWS.map(r => r[status]), "Todos");
-    fillSelect("fGestaoAvaliador", G_ROWS.map(r => r[avaliador]), "Todos");
+    fillSelect("fGestaoCampus", G_ROWS.map(r => r[G_COLS.campus]), "Todos");
+    fillSelect("fGestaoMunicipio", G_ROWS.map(r => r[G_COLS.municipio]), "Todos");
+    fillSelect("fGestaoStatus", G_ROWS.map(r => r[G_COLS.status]), "Todos");
+    fillSelect("fGestaoAvaliador", G_ROWS.map(r => r[G_COLS.avaliador]), "Todos");
 
-    const btn = document.getElementById("btnGestaoLimpar");
-    if (btn) {
-      btn.addEventListener("click", () => {
-        ["fGestaoCampus","fGestaoMunicipio","fGestaoStatus","fGestaoAvaliador"].forEach(id => {
-          const el = document.getElementById(id);
-          if (el) el.value = "";
-        });
+    document.getElementById("btnGestaoLimpar")
+      ?.addEventListener("click", () => {
+        ["fGestaoCampus","fGestaoMunicipio","fGestaoStatus","fGestaoAvaliador"]
+          .forEach(id => document.getElementById(id).value = "");
         refreshGestao();
       });
-    }
 
-    ["fGestaoCampus","fGestaoMunicipio","fGestaoStatus","fGestaoAvaliador"].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener("change", refreshGestao);
-    });
-
-    const lbl = document.getElementById("lblGestaoArquivo");
-    if (lbl) lbl.textContent = "Fonte: IntegraCAR — acompanhamento.csv";
+    ["fGestaoCampus","fGestaoMunicipio","fGestaoStatus","fGestaoAvaliador"]
+      .forEach(id => document.getElementById(id)?.addEventListener("change", refreshGestao));
 
     refreshGestao();
-  } catch (e) {
-    console.error("Erro Painel Gestão:", e);
-    alert("Erro ao carregar o Painel de Gestão. Verifique o arquivo acompanhamento.csv.");
+  } catch (err) {
+    console.error("Erro ao iniciar painel:", err);
+    alert("Erro ao carregar os dados.");
   }
 }
 
