@@ -250,53 +250,28 @@ function updateKPIs(rows) {
 // GRÁFICOS
 // ----------------------------------------------
 
-// Abrevia labels longos de status para caber melhor no eixo Y
+// Abrevia labels de status para caber melhor no eixo Y
 function abreviarStatus(texto) {
   if (!texto) return texto;
-
   let t = texto.trim();
+
+  // substituições simples (se quiser enriquecer depois, é aqui)
   const lower = t.toLowerCase();
+  if (lower.startsWith("aprovado")) t = "Aprov. " + t.substring(8).trim();
+  if (lower.startsWith("aprovada")) t = "Aprov. " + t.substring(8).trim();
+  if (lower.startsWith("indeferido")) t = "Indef. " + t.substring(10).trim();
+  if (lower.startsWith("indeferida")) t = "Indef. " + t.substring(10).trim();
+  if (lower.startsWith("reprovado")) t = "Reprov. " + t.substring(9).trim();
+  if (lower.startsWith("reprovada")) t = "Reprov. " + t.substring(9).trim();
+  if (lower.startsWith("aguardando")) t = "Aguard. " + t.substring(10).trim();
 
-  // substituições comuns
-  const regras = [
-    { de: "aprovado", para: "Aprov." },
-    { de: "aprovada", para: "Aprov." },
-    { de: "reprovado", para: "Reprov." },
-    { de: "reprovada", para: "Reprov." },
-    { de: "indeferido", para: "Indef." },
-    { de: "indeferida", para: "Indef." },
-    { de: "cancelado", para: "Canc." },
-    { de: "cancelada", para: "Canc." },
-    { de: "aguardando", para: "Aguard." },
-    { de: "complementação", para: "compl." },
-    { de: "complementacao", para: "compl." },
-    { de: "documentação", para: "doc." },
-    { de: "documentacao", para: "doc." },
-    { de: "título emitido e entregue", para: "tit. emit./entreg." },
-    { de: "titulo emitido e entregue", para: "tit. emit./entreg." },
-    { de: "emitido e entregue", para: "emit./entreg." },
-    { de: "em análise", para: "Análise" },
-    { de: "em analise", para: "Análise" },
-    { de: "análise", para: "Análise" },
-    { de: "analise", para: "Análise" }
-  ];
-
-  let result = lower;
-  regras.forEach(reg => {
-    if (result.includes(reg.de)) {
-      result = result.replace(reg.de, reg.para.toLowerCase());
-    }
-  });
-
-  // limita tamanho geral
-  if (result.length > 32) {
-    result = result.substring(0, 32) + "...";
+  // limite duro de tamanho para garantir que não corte visualmente
+  const MAX_LEN = 30;
+  if (t.length > MAX_LEN) {
+    t = t.substring(0, MAX_LEN) + "...";
   }
 
-  // capitalização simples: primeira letra maiúscula
-  result = result.charAt(0).toUpperCase() + result.slice(1);
-
-  return result;
+  return t;
 }
 
 function plotStatus(rows) {
@@ -324,6 +299,7 @@ function plotStatus(rows) {
     type: "bar",
     orientation: "h",
     // hover: só o valor (número de processos)
+    hoverinfo: "x",
     hovertemplate: "%{x}<extra></extra>"
   }], {
     height: height,
@@ -349,7 +325,7 @@ function plotStatus(rows) {
   });
 }
 
-// *** VERSÃO: igual ao gráfico de Município, uma barra por campus ***
+// --- Processos por Campus (barras horizontais, como Município) ---
 function plotPorCampus(rows) {
   const { campus } = G_COLS;
   if (!campus) return;
