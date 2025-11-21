@@ -88,6 +88,26 @@ function normalizarAvaliador(nome) {
   return original;
 }
 
+// gera chave canônica *bem* tolerante a pequenas diferenças
+function canonicalAvaliadorKey(nome) {
+  const normFull = nrm(normalizarAvaliador(nome)); // ex: "patricia borges dias"
+  if (!normFull) return "sem avaliador";
+
+  let partes = normFull.split(" ").filter(Boolean);
+  if (partes.length === 0) return "sem avaliador";
+
+  const colapsa = s => s.replace(/(.)\1+/g, "$1"); // remove letras duplicadas
+
+  let first = colapsa(partes[0]);
+  let last  = colapsa(partes[partes.length - 1]);
+
+  // usa só prefixo pra ser mais tolerante a erro interno
+  first = first.slice(0, 4);
+  last  = last.slice(0, 4);
+
+  return `${first} ${last}`; // ex: "pati dias"
+}
+
 // Mostra apenas primeiro + último nome (para label no gráfico)
 function resumirNomeAvaliador(nome) {
   if (!nome) return "";
@@ -443,7 +463,7 @@ function plotPorMunicipio(rows) {
 }
 
 // --- Desempenho por Avaliador (top 10) ---
-// agrupa por avaliador normalizado (chave nrm), mas mostra só primeiro + último nome
+// agrupa por chave canônica tolerante a erros, mostra só primeiro + último nome
 function plotAvaliador(rows) {
   const { avaliador } = G_COLS;
   if (!avaliador) return;
@@ -452,10 +472,12 @@ function plotAvaliador(rows) {
   rows.forEach(r => {
     const aRaw = (r[avaliador] || "Sem avaliador").toString().trim();
     if (!aRaw) return;
-    const aNorm = normalizarAvaliador(aRaw);
-    const key = nrm(aNorm);          // chave de agrupamento insensível a acento/caixa
+
+    const key = canonicalAvaliadorKey(aRaw);   // chave robusta p/ agrupamento
+    const labelNorm = normalizarAvaliador(aRaw);
+
     if (!map[key]) {
-      map[key] = { labelFull: aNorm, count: 0 };
+      map[key] = { labelFull: labelNorm, count: 0 };
     }
     map[key].count += 1;
   });
