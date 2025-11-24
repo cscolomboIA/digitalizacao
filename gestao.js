@@ -163,31 +163,34 @@ function detectColumns(rows) {
   const campus = find(h => nrm(h).includes("campus"));
   const municipio = find(h => nrm(h).includes("munic"));
   const status = find(h => nrm(h).includes("status"));
-  const avaliador = find(h => nrm(h).includes("aval") || nrm(h).includes("tecnico"));
-  const codigo = find(h => nrm(h).includes("processo") || nrm(h).includes("edoc"));
+  const avaliador = find(h => nrm(h).includes("avaliador") || nrm(h).includes("tecnico"));
+  const codigo = find(h => nrm(h).includes("codigo edocs") || nrm(h).includes("edocs") || nrm(h).includes("processo"));
 
   // datas
   const inicio = find(h =>
-    nrm(h).includes("criacao") ||
-    nrm(h).includes("criação") ||
-    nrm(h).includes("abertura") ||
-    nrm(h).includes("inicio") ||
-    nrm(h).includes("analise")
+    nrm(h).includes("inicio da analise") ||
+    nrm(h).includes("início da analise") ||
+    nrm(h).includes("início da análise") ||
+    nrm(h).includes("data e hora do inicio") ||
+    nrm(h).includes("data e hora do início")
   );
 
   const ultima = find(h =>
-    nrm(h).includes("ultima") ||
-    nrm(h).includes("atualiz")
+    nrm(h).includes("ultima atualizacao") ||
+    nrm(h).includes("última atualizacao") ||
+    nrm(h).includes("ultima atualização") ||
+    nrm(h).includes("ultima atualiz")
   );
 
   // meta / prazo
   const meta = find(h =>
+    nrm(h).includes("meta de prazo") ||
     nrm(h).includes("meta") ||
     nrm(h).includes("prazo") ||
     nrm(h).includes("sla")
   );
 
-  // tipo de solução do processo
+  // tipo de solução do processo (ainda não existe coluna no CSV atual)
   const tipoSolucao = find(h =>
     nrm(h).includes("soluc") ||
     nrm(h).includes("tipo de solucao") ||
@@ -195,11 +198,19 @@ function detectColumns(rows) {
   );
 
   // colunas extra: orientador, bolsista, consultor IDAF
-  const orientador = find(h => nrm(h).includes("orientad"));
-  const bolsista   = find(h => nrm(h).includes("bolsista"));
+  const orientador = find(h =>
+    nrm(h).includes("orientador ifes") ||
+    nrm(h).includes("orientad")
+  );
+
+  const bolsista = find(h =>
+    nrm(h).includes("bolsista")
+  );
+
   const consultorIdaf = find(h =>
-    nrm(h).includes("consultor") ||
-    (nrm(h).includes("idaf") && nrm(h).includes("consul"))
+    nrm(h).includes("ponto focal idaf") ||
+    (nrm(h).includes("ponto focal") && nrm(h).includes("idaf")) ||
+    nrm(h).includes("consultor idaf")
   );
 
   console.log("Colunas detectadas:", {
@@ -562,7 +573,16 @@ function plotAvaliador(rows) {
 // --- Tipo de solução dada ao processo ---
 function plotTipoSolucao(rows) {
   const { tipoSolucao } = G_COLS;
-  if (!tipoSolucao) return;
+  const divId = "chartGTipoSolucao";
+  const el = document.getElementById(divId);
+
+  // não há coluna correspondente
+  if (!tipoSolucao) {
+    if (el) {
+      el.innerHTML = "<p style='font-size:12px;color:#888;margin:8px 0;'>Sem coluna de tipo de solução no arquivo CSV.</p>";
+    }
+    return;
+  }
 
   const map = {};
   rows.forEach(r => {
@@ -574,10 +594,17 @@ function plotTipoSolucao(rows) {
   const labels = Object.keys(map);
   const values = labels.map(k => map[k]);
 
+  if (!labels.length) {
+    if (el) {
+      el.innerHTML = "<p style='font-size:12px;color:#888;margin:8px 0;'>Sem dados para exibir.</p>";
+    }
+    return;
+  }
+
   const num = labels.length || 1;
   const height = Math.max(240, Math.min(700, num * 28));
 
-  Plotly.newPlot("chartGTipoSolucao", [{
+  Plotly.newPlot(divId, [{
     x: values,
     y: labels,
     type: "bar",
@@ -600,13 +627,20 @@ function plotTipoSolucao(rows) {
 // --- Orientadores (barras horizontais) ---
 function plotPorOrientador(rows) {
   const { orientador } = G_COLS;
-  if (!orientador) return;
+  const divId = "chartGOrientador";
+  const el = document.getElementById(divId);
+
+  if (!orientador) {
+    if (el) {
+      el.innerHTML = "<p style='font-size:12px;color:#888;margin:8px 0;'>Sem coluna de orientador no arquivo CSV.</p>";
+    }
+    return;
+  }
 
   const map = {};
   rows.forEach(r => {
-    const raw = (r[orientador] || "Sem orientador").toString().trim();
+    const raw = (r[orientador] || "").toString().trim();
     if (!raw) return;
-
     const key = canonicalAvaliadorKey(raw);
     if (!map[key]) {
       map[key] = { labelFull: raw, count: 0 };
@@ -614,8 +648,13 @@ function plotPorOrientador(rows) {
     map[key].count += 1;
   });
 
-  const arr = Object.values(map)
-    .sort((a, b) => b.count - a.count);
+  const arr = Object.values(map).sort((a, b) => b.count - a.count);
+  if (!arr.length) {
+    if (el) {
+      el.innerHTML = "<p style='font-size:12px;color:#888;margin:8px 0;'>Sem dados de orientadores para exibir.</p>";
+    }
+    return;
+  }
 
   const valores = arr.map(x => x.count);
   const labelsCurta = arr.map(x => resumirNomeAvaliador(x.labelFull));
@@ -623,7 +662,7 @@ function plotPorOrientador(rows) {
   const num = labelsCurta.length || 1;
   const height = Math.max(240, Math.min(700, num * 28));
 
-  Plotly.newPlot("chartGOrientador", [{
+  Plotly.newPlot(divId, [{
     x: valores,
     y: labelsCurta,
     type: "bar",
@@ -646,13 +685,20 @@ function plotPorOrientador(rows) {
 // --- Bolsistas (barras horizontais) ---
 function plotPorBolsista(rows) {
   const { bolsista } = G_COLS;
-  if (!bolsista) return;
+  const divId = "chartGBolsista";
+  const el = document.getElementById(divId);
+
+  if (!bolsista) {
+    if (el) {
+      el.innerHTML = "<p style='font-size:12px;color:#888;margin:8px 0;'>Sem coluna de bolsista no arquivo CSV.</p>";
+    }
+    return;
+  }
 
   const map = {};
   rows.forEach(r => {
-    const raw = (r[bolsista] || "Sem bolsista").toString().trim();
+    const raw = (r[bolsista] || "").toString().trim();
     if (!raw) return;
-
     const key = canonicalAvaliadorKey(raw);
     if (!map[key]) {
       map[key] = { labelFull: raw, count: 0 };
@@ -660,8 +706,13 @@ function plotPorBolsista(rows) {
     map[key].count += 1;
   });
 
-  const arr = Object.values(map)
-    .sort((a, b) => b.count - a.count);
+  const arr = Object.values(map).sort((a, b) => b.count - a.count);
+  if (!arr.length) {
+    if (el) {
+      el.innerHTML = "<p style='font-size:12px;color:#888;margin:8px 0;'>Sem dados de bolsistas para exibir.</p>";
+    }
+    return;
+  }
 
   const valores = arr.map(x => x.count);
   const labelsCurta = arr.map(x => resumirNomeAvaliador(x.labelFull));
@@ -669,7 +720,7 @@ function plotPorBolsista(rows) {
   const num = labelsCurta.length || 1;
   const height = Math.max(240, Math.min(700, num * 28));
 
-  Plotly.newPlot("chartGBolsista", [{
+  Plotly.newPlot(divId, [{
     x: valores,
     y: labelsCurta,
     type: "bar",
@@ -692,13 +743,20 @@ function plotPorBolsista(rows) {
 // --- Consultores do IDAF (barras horizontais) ---
 function plotPorConsultorIDAF(rows) {
   const { consultorIdaf } = G_COLS;
-  if (!consultorIdaf) return;
+  const divId = "chartGConsultorIdaf";
+  const el = document.getElementById(divId);
+
+  if (!consultorIdaf) {
+    if (el) {
+      el.innerHTML = "<p style='font-size:12px;color:#888;margin:8px 0;'>Sem coluna de consultor/ponto focal Idaf no arquivo CSV.</p>";
+    }
+    return;
+  }
 
   const map = {};
   rows.forEach(r => {
-    const raw = (r[consultorIdaf] || "Sem consultor").toString().trim();
+    const raw = (r[consultorIdaf] || "").toString().trim();
     if (!raw) return;
-
     const key = canonicalAvaliadorKey(raw);
     if (!map[key]) {
       map[key] = { labelFull: raw, count: 0 };
@@ -706,8 +764,13 @@ function plotPorConsultorIDAF(rows) {
     map[key].count += 1;
   });
 
-  const arr = Object.values(map)
-    .sort((a, b) => b.count - a.count);
+  const arr = Object.values(map).sort((a, b) => b.count - a.count);
+  if (!arr.length) {
+    if (el) {
+      el.innerHTML = "<p style='font-size:12px;color:#888;margin:8px 0;'>Sem dados de consultores Idaf para exibir.</p>";
+    }
+    return;
+  }
 
   const valores = arr.map(x => x.count);
   const labelsCurta = arr.map(x => resumirNomeAvaliador(x.labelFull));
@@ -715,7 +778,7 @@ function plotPorConsultorIDAF(rows) {
   const num = labelsCurta.length || 1;
   const height = Math.max(240, Math.min(700, num * 28));
 
-  Plotly.newPlot("chartGConsultorIdaf", [{
+  Plotly.newPlot(divId, [{
     x: valores,
     y: labelsCurta,
     type: "bar",
