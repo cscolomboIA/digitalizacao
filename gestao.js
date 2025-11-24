@@ -187,9 +187,50 @@ function detectColumns(rows) {
     nrm(h).includes("sla")
   );
 
-  console.log("Colunas detectadas:", { campus, municipio, status, avaliador, inicio, ultima, meta, codigo });
+  // tipo de solução do processo
+  const tipoSolucao = find(h =>
+    nrm(h).includes("soluc") ||
+    nrm(h).includes("tipo de solucao") ||
+    nrm(h).includes("tipo_solucao")
+  );
 
-  return { campus, municipio, status, avaliador, inicio, ultima, meta, codigo };
+  // colunas extra: orientador, bolsista, consultor IDAF
+  const orientador = find(h => nrm(h).includes("orientad"));
+  const bolsista   = find(h => nrm(h).includes("bolsista"));
+  const consultorIdaf = find(h =>
+    nrm(h).includes("consultor") ||
+    (nrm(h).includes("idaf") && nrm(h).includes("consul"))
+  );
+
+  console.log("Colunas detectadas:", {
+    campus,
+    municipio,
+    status,
+    avaliador,
+    inicio,
+    ultima,
+    meta,
+    codigo,
+    tipoSolucao,
+    orientador,
+    bolsista,
+    consultorIdaf
+  });
+
+  return {
+    campus,
+    municipio,
+    status,
+    avaliador,
+    inicio,
+    ultima,
+    meta,
+    codigo,
+    tipoSolucao,
+    orientador,
+    bolsista,
+    consultorIdaf
+  };
 }
 
 // ----------------------------------------------
@@ -418,6 +459,9 @@ function plotPorCampus(rows) {
   const labels = Object.keys(map);
   const values = labels.map(k => map[k]);
 
+  const num = labels.length || 1;
+  const height = Math.max(260, Math.min(700, num * 28));
+
   Plotly.newPlot("chartGCampus", [{
     x: values,
     y: labels,
@@ -426,9 +470,12 @@ function plotPorCampus(rows) {
     hoverinfo: "x",
     hovertemplate: "%{x}<extra></extra>"
   }], {
-    margin:{ t:10, l:180, r:10, b:30 },
+    height,
+    margin:{ t:10, l:200, r:20, b:40 },
     paper_bgcolor:"rgba(0,0,0,0)",
-    plot_bgcolor:"rgba(0,0,0,0)"
+    plot_bgcolor:"rgba(0,0,0,0)",
+    yaxis: { automargin: true, tickfont: { size: 11 } },
+    xaxis: { automargin: true, tickfont: { size: 11 } }
   }, {
     displayModeBar:false,
     responsive:true
@@ -450,6 +497,9 @@ function plotPorMunicipio(rows) {
   const labels = Object.keys(map);
   const values = labels.map(k => map[k]);
 
+  const num = labels.length || 1;
+  const height = Math.max(260, Math.min(700, num * 28));
+
   Plotly.newPlot("chartGMunicipio", [{
     x: values,
     y: labels,
@@ -458,7 +508,15 @@ function plotPorMunicipio(rows) {
     hoverinfo: "x",
     hovertemplate: "%{x}<extra></extra>"
   }], {
-    margin:{ t:10, l:160 }
+    height,
+    margin:{ t:10, l:200, r:20, b:40 },
+    paper_bgcolor:"rgba(0,0,0,0)",
+    plot_bgcolor:"rgba(0,0,0,0)",
+    yaxis: { automargin: true, tickfont: { size: 11 } },
+    xaxis: { automargin: true, tickfont: { size: 11 } }
+  }, {
+    displayModeBar:false,
+    responsive:true
   });
 }
 
@@ -498,6 +556,182 @@ function plotAvaliador(rows) {
     hovertemplate: "%{x}<extra></extra>"
   }], {
     margin:{ t:10, l:200 }
+  });
+}
+
+// --- Tipo de solução dada ao processo ---
+function plotTipoSolucao(rows) {
+  const { tipoSolucao } = G_COLS;
+  if (!tipoSolucao) return;
+
+  const map = {};
+  rows.forEach(r => {
+    const t = (r[tipoSolucao] || "Sem informação").toString().trim();
+    if (!t) return;
+    map[t] = (map[t] || 0) + 1;
+  });
+
+  const labels = Object.keys(map);
+  const values = labels.map(k => map[k]);
+
+  const num = labels.length || 1;
+  const height = Math.max(240, Math.min(700, num * 28));
+
+  Plotly.newPlot("chartGTipoSolucao", [{
+    x: values,
+    y: labels,
+    type: "bar",
+    orientation: "h",
+    hoverinfo: "x",
+    hovertemplate: "%{x}<extra></extra>"
+  }], {
+    height,
+    margin: { t:10, l:220, r:20, b:40 },
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "rgba(0,0,0,0)",
+    yaxis: { automargin: true, tickfont: { size: 11 } },
+    xaxis: { automargin: true, tickfont: { size: 11 } }
+  }, {
+    displayModeBar: false,
+    responsive: true
+  });
+}
+
+// --- Orientadores (barras horizontais) ---
+function plotPorOrientador(rows) {
+  const { orientador } = G_COLS;
+  if (!orientador) return;
+
+  const map = {};
+  rows.forEach(r => {
+    const raw = (r[orientador] || "Sem orientador").toString().trim();
+    if (!raw) return;
+
+    const key = canonicalAvaliadorKey(raw);
+    if (!map[key]) {
+      map[key] = { labelFull: raw, count: 0 };
+    }
+    map[key].count += 1;
+  });
+
+  const arr = Object.values(map)
+    .sort((a, b) => b.count - a.count);
+
+  const valores = arr.map(x => x.count);
+  const labelsCurta = arr.map(x => resumirNomeAvaliador(x.labelFull));
+
+  const num = labelsCurta.length || 1;
+  const height = Math.max(240, Math.min(700, num * 28));
+
+  Plotly.newPlot("chartGOrientador", [{
+    x: valores,
+    y: labelsCurta,
+    type: "bar",
+    orientation: "h",
+    hoverinfo: "x",
+    hovertemplate: "%{x}<extra></extra>"
+  }], {
+    height,
+    margin:{ t:10, l:200, r:20, b:40 },
+    paper_bgcolor:"rgba(0,0,0,0)",
+    plot_bgcolor:"rgba(0,0,0,0)",
+    yaxis: { automargin: true, tickfont: { size: 11 } },
+    xaxis: { automargin: true, tickfont: { size: 11 } }
+  }, {
+    displayModeBar:false,
+    responsive:true
+  });
+}
+
+// --- Bolsistas (barras horizontais) ---
+function plotPorBolsista(rows) {
+  const { bolsista } = G_COLS;
+  if (!bolsista) return;
+
+  const map = {};
+  rows.forEach(r => {
+    const raw = (r[bolsista] || "Sem bolsista").toString().trim();
+    if (!raw) return;
+
+    const key = canonicalAvaliadorKey(raw);
+    if (!map[key]) {
+      map[key] = { labelFull: raw, count: 0 };
+    }
+    map[key].count += 1;
+  });
+
+  const arr = Object.values(map)
+    .sort((a, b) => b.count - a.count);
+
+  const valores = arr.map(x => x.count);
+  const labelsCurta = arr.map(x => resumirNomeAvaliador(x.labelFull));
+
+  const num = labelsCurta.length || 1;
+  const height = Math.max(240, Math.min(700, num * 28));
+
+  Plotly.newPlot("chartGBolsista", [{
+    x: valores,
+    y: labelsCurta,
+    type: "bar",
+    orientation: "h",
+    hoverinfo: "x",
+    hovertemplate: "%{x}<extra></extra>"
+  }], {
+    height,
+    margin:{ t:10, l:200, r:20, b:40 },
+    paper_bgcolor:"rgba(0,0,0,0)",
+    plot_bgcolor:"rgba(0,0,0,0)",
+    yaxis: { automargin: true, tickfont: { size: 11 } },
+    xaxis: { automargin: true, tickfont: { size: 11 } }
+  }, {
+    displayModeBar:false,
+    responsive:true
+  });
+}
+
+// --- Consultores do IDAF (barras horizontais) ---
+function plotPorConsultorIDAF(rows) {
+  const { consultorIdaf } = G_COLS;
+  if (!consultorIdaf) return;
+
+  const map = {};
+  rows.forEach(r => {
+    const raw = (r[consultorIdaf] || "Sem consultor").toString().trim();
+    if (!raw) return;
+
+    const key = canonicalAvaliadorKey(raw);
+    if (!map[key]) {
+      map[key] = { labelFull: raw, count: 0 };
+    }
+    map[key].count += 1;
+  });
+
+  const arr = Object.values(map)
+    .sort((a, b) => b.count - a.count);
+
+  const valores = arr.map(x => x.count);
+  const labelsCurta = arr.map(x => resumirNomeAvaliador(x.labelFull));
+
+  const num = labelsCurta.length || 1;
+  const height = Math.max(240, Math.min(700, num * 28));
+
+  Plotly.newPlot("chartGConsultorIdaf", [{
+    x: valores,
+    y: labelsCurta,
+    type: "bar",
+    orientation: "h",
+    hoverinfo: "x",
+    hovertemplate: "%{x}<extra></extra>"
+  }], {
+    height,
+    margin:{ t:10, l:200, r:20, b:40 },
+    paper_bgcolor:"rgba(0,0,0,0)",
+    plot_bgcolor:"rgba(0,0,0,0)",
+    yaxis: { automargin: true, tickfont: { size: 11 } },
+    xaxis: { automargin: true, tickfont: { size: 11 } }
+  }, {
+    displayModeBar:false,
+    responsive:true
   });
 }
 
@@ -574,6 +808,10 @@ function refreshGestao() {
   plotPorCampus(filtered);
   plotPorMunicipio(filtered);
   plotAvaliador(filtered);
+  plotTipoSolucao(filtered);
+  plotPorOrientador(filtered);
+  plotPorBolsista(filtered);
+  plotPorConsultorIDAF(filtered);
   buildPendencias(filtered);
 }
 
