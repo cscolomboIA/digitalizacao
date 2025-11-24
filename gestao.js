@@ -164,13 +164,21 @@ function detectColumns(rows) {
   const municipio = find(h => nrm(h).includes("munic"));
   const status = find(h => nrm(h).includes("status"));
   const avaliador = find(h => nrm(h).includes("avaliador") || nrm(h).includes("tecnico"));
-  const codigo = find(h => nrm(h).includes("codigo edocs") || nrm(h).includes("edocs") || nrm(h).includes("processo"));
+
+  const codigo = find(h => {
+    const x = nrm(h);
+    return (
+      x.includes("codigo edocs") ||
+      x.includes("codigo do empreendimento") ||
+      x.includes("codigo empreendimento") ||
+      x.includes("processo florestal")
+    );
+  });
 
   // datas
   const inicio = find(h =>
     nrm(h).includes("inicio da analise") ||
-    nrm(h).includes("início da analise") ||
-    nrm(h).includes("início da análise") ||
+    nrm(h).includes("inicio da análise") ||
     nrm(h).includes("data e hora do inicio") ||
     nrm(h).includes("data e hora do início")
   );
@@ -185,6 +193,7 @@ function detectColumns(rows) {
   // meta / prazo
   const meta = find(h =>
     nrm(h).includes("meta de prazo") ||
+    nrm(h).includes("meta de prazo de encaminhamento do processo") ||
     nrm(h).includes("meta") ||
     nrm(h).includes("prazo") ||
     nrm(h).includes("sla")
@@ -207,11 +216,14 @@ function detectColumns(rows) {
     nrm(h).includes("bolsista")
   );
 
-  const consultorIdaf = find(h =>
-    nrm(h).includes("ponto focal idaf") ||
-    (nrm(h).includes("ponto focal") && nrm(h).includes("idaf")) ||
-    nrm(h).includes("consultor idaf")
-  );
+  const consultorIdaf = find(h => {
+    const x = nrm(h).replace(/\uFEFF/g, "");
+    return (
+      x.includes("ponto") &&
+      x.includes("focal") &&
+      x.includes("idaf")
+    );
+  });
 
   console.log("Colunas detectadas:", {
     campus,
@@ -532,7 +544,6 @@ function plotPorMunicipio(rows) {
 }
 
 // --- Desempenho por Avaliador (top 10) ---
-// agrupa por chave canônica tolerante a erros, mostra só primeiro + último nome
 function plotAvaliador(rows) {
   const { avaliador } = G_COLS;
   if (!avaliador) return;
@@ -542,7 +553,7 @@ function plotAvaliador(rows) {
     const aRaw = (r[avaliador] || "Sem avaliador").toString().trim();
     if (!aRaw) return;
 
-    const key = canonicalAvaliadorKey(aRaw);   // chave robusta p/ agrupamento
+    const key = canonicalAvaliadorKey(aRaw);
     const labelNorm = normalizarAvaliador(aRaw);
 
     if (!map[key]) {
@@ -576,7 +587,6 @@ function plotTipoSolucao(rows) {
   const divId = "chartGTipoSolucao";
   const el = document.getElementById(divId);
 
-  // não há coluna correspondente
   if (!tipoSolucao) {
     if (el) {
       el.innerHTML = "<p style='font-size:12px;color:#888;margin:8px 0;'>Sem coluna de tipo de solução no arquivo CSV.</p>";
