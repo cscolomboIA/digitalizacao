@@ -150,43 +150,26 @@
     ["vitória - es", "Vitória"],
   ]);
 
-  const normalizeMunicipio = (raw) => {
-    let v = removeUfSuffix(raw);
-    if (!v) return "";
+const normalizeMunicipio = (raw) => {
+  let v = removeUfSuffix(raw);
+  if (!v) return "";
 
-    // correções diretas comuns
-    v = v.replace(/Itapemerim/gi, "Itapemirim");
-    v = v.replace(/\s+/g, " ").trim();
+  // correções diretas comuns
+  v = v.replace(/Itapemerim/gi, "Itapemirim");
+  v = v.replace(/\s+/g, " ").trim();
 
-    const key = simplify(v);
+  const key = simplify(v);
 
-    // 1) correções explícitas
-    if (MUNICIPIO_FIX.has(key)) return MUNICIPIO_FIX.get(key);
+  // 1) correções explícitas
+  if (MUNICIPIO_FIX.has(key)) return MUNICIPIO_FIX.get(key);
 
-    // 2) match exato com lista oficial
-    if (ES_MUNICIPIOS_MAP.has(key)) return ES_MUNICIPIOS_MAP.get(key);
+  // 2) match exato com lista oficial
+  if (ES_MUNICIPIOS_MAP.has(key)) return ES_MUNICIPIOS_MAP.get(key);
 
-    // 3) fuzzy match contra lista oficial
-    // threshold: nomes longos toleram 3; curtos toleram 2
-    const maxDist = key.length >= 12 ? 3 : 2;
-
-    let best = null;
-    let bestD = Infinity;
-
-    for (const [k, official] of ES_MUNICIPIOS_MAP.entries()) {
-      const d = levenshtein(key, k);
-      if (d < bestD) {
-        bestD = d;
-        best = official;
-      }
-      if (bestD === 0) break;
-    }
-
-    if (best && bestD <= maxDist) return best;
-
-    // se não achou, devolve como está (já sem "- ES")
-    return v;
-  };
+  // 3) fuzzy match...
+  // (resto igual)
+  ...
+};
 
   // =========================
   // CAMPUS: dicionário simples (baseado na sua foto)
