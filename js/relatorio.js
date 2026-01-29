@@ -45,79 +45,219 @@
 
   let base = [];
 
+  // -------------------------
+  // Utils
+  // -------------------------
   const norm = (v) => (v ?? "").toString().trim();
+
+  const simplify = (s) =>
+    norm(s)
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+      .replace(/[\s\-_/]+/g, " ")
+      .trim()
+      .toLowerCase();
+
+  const removeUfSuffix = (s) => {
+    let v = norm(s);
+    if (!v) return "";
+    return v
+      .replace(/\s*-\s*ES\s*$/i, "")
+      .replace(/\s*\(\s*ES\s*\)\s*$/i, "")
+      .replace(/\s*\/\s*ES\s*$/i, "")
+      .replace(/\s*-\s*E\s*S\s*$/i, "") // “- E S”
+      .trim();
+  };
 
   const uniqSorted = (arr) => {
     const set = new Set(arr.map(norm).filter(Boolean));
     return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
   };
 
-  const loadCSV = () => {
-    return new Promise((resolve, reject) => {
-      Papa.parse(CSV_URL, {
-        download: true,
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          if (results?.errors?.length) console.error("Erros CSV:", results.errors);
-          resolve(results.data || []);
-        },
-        error: (err) => reject(err),
-      });
+  const loadCSV = () => new Promise((resolve, reject) => {
+    Papa.parse(CSV_URL, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        if (results?.errors?.length) console.error("Erros CSV:", results.errors);
+        resolve(results.data || []);
+      },
+      error: (err) => reject(err),
     });
+  });
+
+  // -------------------------
+  // Levenshtein (fuzzy match)
+  // -------------------------
+  const levenshtein = (a, b) => {
+    a = simplify(a);
+    b = simplify(b);
+    const m = a.length, n = b.length;
+    if (m === 0) return n;
+    if (n === 0) return m;
+
+    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        dp[i][j] = Math.min(
+          dp[i - 1][j] + 1,     // delete
+          dp[i][j - 1] + 1,     // insert
+          dp[i - 1][j - 1] + cost // replace
+        );
+      }
+    }
+    return dp[m][n];
   };
 
   // =========================
-  // NORMALIZAÇÃO DE MUNICÍPIOS
+  // MUNICÍPIOS: lista oficial ES (78)
   // =========================
+  const ES_MUNICIPIOS = [
+    "Afonso Cláudio","Águia Branca","Alegre","Alfredo Chaves","Alto Rio Novo","Anchieta","Apiacá","Aracruz",
+    "Atílio Vivácqua","Baixo Guandu","Barra de São Francisco","Boa Esperança","Bom Jesus do Norte","Brejetuba",
+    "Cachoeiro de Itapemirim","Cariacica","Castelo","Colatina","Conceição da Barra","Conceição do Castelo",
+    "Divino de São Lourenço","Domingos Martins","Dores do Rio Preto","Ecoporanga","Fundão","Governador Lindenberg",
+    "Guaçuí","Guarapari","Ibatiba","Ibiraçu","Ibitirama","Iconha","Irupi","Itaguaçu","Itapemirim","Itarana","Iúna",
+    "Jaguaré","Jerônimo Monteiro","João Neiva","Laranja da Terra","Linhares","Mantenópolis","Marataízes",
+    "Marechal Floriano","Marilândia","Mimoso do Sul","Montanha","Mucurici","Muniz Freire","Muqui","Nova Venécia",
+    "Pancas","Pedro Canário","Pinheiros","Piúma","Ponto Belo","Presidente Kennedy","Rio Bananal","Rio Novo do Sul",
+    "Santa Leopoldina","Santa Maria de Jetibá","Santa Teresa","São Domingos do Norte","São Gabriel da Palha",
+    "São José do Calçado","São Mateus","São Roque do Canaã","Serra","Sooretama","Vargem Alta",
+    "Venda Nova do Imigrante","Viana","Vila Pavão","Vila Valério","Vila Velha","Vitória"
+  ];
 
-  // Mapa de correções explícitas (chave em "forma canônica simplificada")
+  // índice simplificado -> nome oficial
+  const ES_MUNICIPIOS_MAP = new Map(ES_MUNICIPIOS.map(n => [simplify(n), n]));
+
+  // correções explícitas (além do fuzzy)
   const MUNICIPIO_FIX = new Map([
-    // Cachoeiro (variações)
     ["cachoeiro de itapemerim", "Cachoeiro de Itapemirim"],
     ["cachoeiro de itapemirim es", "Cachoeiro de Itapemirim"],
     ["cachoeiro de itapemirim - es", "Cachoeiro de Itapemirim"],
-    ["cachoeiro de itapemirim", "Cachoeiro de Itapemirim"],
-
-    // Exemplos (adicione outros aqui se aparecerem)
-    // ["vitoria", "Vitória"],
-    // ["sao mateus", "São Mateus"],
   ]);
 
-  // Remove acentos e normaliza para comparar
-  const simplify = (s) => {
-    return norm(s)
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
-      .replace(/\s+/g, " ")
-      .trim()
-      .toLowerCase();
-  };
-
   const normalizeMunicipio = (raw) => {
-    let v = norm(raw);
+    let v = removeUfSuffix(raw);
     if (!v) return "";
 
-    // 1) remove sufixos comuns tipo " - ES", "(ES)", "/ES" etc
-    v = v
-      .replace(/\s*-\s*ES\s*$/i, "")
-      .replace(/\s*\(\s*ES\s*\)\s*$/i, "")
-      .replace(/\s*\/\s*ES\s*$/i, "")
-      .trim();
-
-    // 2) corrige erro de digitação específico (sem depender de acento)
-    // (faz substituição direta antes de aplicar mapa)
+    // correções diretas comuns
     v = v.replace(/Itapemerim/gi, "Itapemirim");
+    v = v.replace(/\s+/g, " ").trim();
 
-    // 3) aplica mapa de correções por forma simplificada
     const key = simplify(v);
+
+    // 1) correções explícitas
     if (MUNICIPIO_FIX.has(key)) return MUNICIPIO_FIX.get(key);
 
-    // 4) retorno padrão: mantém como veio (mas já sem "- ES")
+    // 2) match exato com lista oficial
+    if (ES_MUNICIPIOS_MAP.has(key)) return ES_MUNICIPIOS_MAP.get(key);
+
+    // 3) fuzzy match contra lista oficial
+    // threshold: nomes longos toleram 3; curtos toleram 2
+    const maxDist = key.length >= 12 ? 3 : 2;
+
+    let best = null;
+    let bestD = Infinity;
+
+    for (const [k, official] of ES_MUNICIPIOS_MAP.entries()) {
+      const d = levenshtein(key, k);
+      if (d < bestD) {
+        bestD = d;
+        best = official;
+      }
+      if (bestD === 0) break;
+    }
+
+    if (best && bestD <= maxDist) return best;
+
+    // se não achou, devolve como está (já sem "- ES")
     return v;
   };
 
   // =========================
-  // NORMALIZAÇÃO DE STATUS
+  // CAMPUS: dicionário simples (baseado na sua foto)
+  // =========================
+  // Regra: colapsar variações para um conjunto pequeno e consistente.
+  const CAMPUS_CANON = [
+    "Alegre",
+    "Barra de São Francisco",
+    "Cachoeiro de Itapemirim",
+    "Colatina",
+    "Ibatiba",
+    "Itapina",
+    "Linhares",
+    "Montanha",
+    "Nova Venécia",
+    "Piúma",
+    "Santa Teresa",
+    "Vitória",
+    "IDAF",      // aparece como origem/colaborador
+    "Outros"     // se você já usa “Outros”
+  ];
+
+  const CAMPUS_MAP = new Map(CAMPUS_CANON.map(n => [simplify(n), n]));
+
+  const CAMPUS_FIX = new Map([
+    // variações de Alegre
+    ["alegre - es", "Alegre"],
+    ["alegre es", "Alegre"],
+    ["ifes campus de alegre", "Alegre"],
+    ["ifes campus alegre", "Alegre"],
+
+    // variações de IDAF
+    ["idaf", "IDAF"],
+    ["i d a f", "IDAF"],
+
+    // normaliza sem UF para evitar “Cachoeiro... - ES”
+    ["cachoeiro de itapemirim es", "Cachoeiro de Itapemirim"],
+    ["cachoeiro de itapemirim - es", "Cachoeiro de Itapemirim"],
+
+    // Se aparecer “Piúma - ES”
+    ["piuma - es", "Piúma"],
+    ["piuma es", "Piúma"],
+
+    // Se aparecerem problemas com acento
+    ["vitoria", "Vitória"],
+    ["santa teresa", "Santa Teresa"],
+    ["nova venecia", "Nova Venécia"],
+  ]);
+
+  const normalizeCampus = (raw) => {
+    let v = removeUfSuffix(raw);
+    if (!v) return "";
+
+    // correções explícitas
+    const key0 = simplify(v);
+    if (CAMPUS_FIX.has(key0)) return CAMPUS_FIX.get(key0);
+
+    // match exato (com acento)
+    const key = simplify(v);
+    if (CAMPUS_MAP.has(key)) return CAMPUS_MAP.get(key);
+
+    // fuzzy leve (para “Alegre - Es” etc, mas já tratamos acima)
+    const maxDist = key.length >= 10 ? 3 : 2;
+
+    let best = null;
+    let bestD = Infinity;
+
+    for (const [k, canon] of CAMPUS_MAP.entries()) {
+      const d = levenshtein(key, k);
+      if (d < bestD) { bestD = d; best = canon; }
+      if (bestD === 0) break;
+    }
+
+    if (best && bestD <= maxDist) return best;
+
+    // fallback
+    return v;
+  };
+
+  // =========================
+  // STATUS
   // =========================
   const statusNormalize = (s) => norm(s);
 
@@ -143,13 +283,11 @@
     municipio: norm(el.filtroMunicipio?.value),
   });
 
-  const applyFilters = (rows, f) => {
-    return rows.filter((r) => {
-      if (f.campus && norm(r[COL.campus]) !== f.campus) return false;
-      if (f.municipio && norm(r[COL.municipio]) !== f.municipio) return false;
-      return true;
-    });
-  };
+  const applyFilters = (rows, f) => rows.filter((r) => {
+    if (f.campus && norm(r[COL.campus]) !== f.campus) return false;
+    if (f.municipio && norm(r[COL.municipio]) !== f.municipio) return false;
+    return true;
+  });
 
   // =========================
   // PIVOT
@@ -177,12 +315,9 @@
 
     let arr = Array.from(pivot.entries()).map(([label, counts]) => ({ label, ...counts }));
 
-    // Município em ordem alfabética (A→Z); demais por total desc
-    if (dimValue === "municipio") {
-      arr.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
-    } else {
-      arr.sort((a, b) => (b.__total || 0) - (a.__total || 0));
-    }
+    // Município: A→Z; demais: total desc
+    if (dimValue === "municipio") arr.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+    else arr.sort((a, b) => (b.__total || 0) - (a.__total || 0));
 
     return arr;
   };
@@ -398,11 +533,11 @@
       wireEvents();
       base = await loadCSV();
 
-      // normaliza município ANTES de filtros/pivôs
+      // ✅ normaliza Município e Campus ANTES de filtros/pivôs
       base = base
         .map(r => ({
           ...r,
-          [COL.campus]: norm(r[COL.campus]),
+          [COL.campus]: normalizeCampus(r[COL.campus]),
           [COL.municipio]: normalizeMunicipio(r[COL.municipio]),
           [COL.orientador]: norm(r[COL.orientador]),
           [COL.status]: statusNormalize(r[COL.status]),
