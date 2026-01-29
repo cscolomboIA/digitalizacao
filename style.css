@@ -91,3 +91,28 @@ select{border:1px solid var(--border);padding:8px;border-radius:8px;background:#
   position: relative;
 }
 
+/* ================================
+   Tabela do Relatório (Pivô)
+   ================================ */
+
+/* Centraliza cabeçalhos */
+#pivotHead th {
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Centraliza valores numéricos */
+#pivotBody td,
+#pivotFoot td {
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Centraliza o rótulo da linha (Município / Campus / Orientador) */
+#pivotBody th,
+#pivotFoot th {
+  text-align: center;
+  vertical-align: middle;
+  font-weight: 600;
+}
+
