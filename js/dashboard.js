@@ -1,9 +1,11 @@
 // js/dashboard.js
 (() => {
-  // ====== CONFIG ======
-  const CSV_URL = "data/TODOS_DADOS_UNIFICADOS.csv"; // ajuste o caminho no seu repo
+  // =========================
+  // CONFIG
+  // =========================
+  const CSV_URL = "data/TODOS_DADOS_UNIFICADOS.csv"; // caminho no GitHub Pages
 
-  // Mapeamento de colunas (conforme o CSV anexado)
+  // Colunas do CSV (nomes exatamente como no arquivo)
   const COL = {
     campus: "Campus",
     municipio: "Município",
@@ -16,31 +18,34 @@
     dataUltStatus: "Data da ultima atualização de status",
   };
 
-  // IDs esperados no DOM
+  // IDs do seu HTML
   const el = {
-    filtroCampus: document.getElementById("filtroCampus"),
-    filtroMunicipio: document.getElementById("filtroMunicipio"),
-    filtroAutor: document.getElementById("filtroAutor"),
-    btnLimpar: document.getElementById("btnLimparFiltros"),
+    fCampus: document.getElementById("fCampus"),
+    fMunicipio: document.getElementById("fMunicipio"),
+    fFuncao: document.getElementById("fFuncao"),
+    btnLimpar: document.getElementById("btnLimpar"),
 
-    cardTotal: document.getElementById("cardTotalRegistros"),
-    cardCampi: document.getElementById("cardCampi"),
-    cardMunicipios: document.getElementById("cardMunicipios"),
-    cardAutores: document.getElementById("cardAutores"),
+    kpiTotal: document.getElementById("kpiTotal"),
+    kpiCampi: document.getElementById("kpiCampi"),
+    kpiMunicipios: document.getElementById("kpiMunicipios"),
+    kpiOrientadores: document.getElementById("kpiOrientadores"),
 
-    canvasCampus: document.getElementById("graficoCampus"),
-    canvasMunicipio: document.getElementById("graficoMunicipio"),
+    chartCampus: document.getElementById("chartCampus"),
+    chartMunicipio: document.getElementById("chartMunicipio"),
 
-    tbody: document.getElementById("tbodyBaseCompleta"),
-    btnExportar: document.getElementById("btnExportarCSV"),
+    dataTable: document.getElementById("dataTable"),
+    btnDownloadCSV: document.getElementById("btnDownloadCSV"),
   };
 
-  // ====== STATE ======
+  // =========================
+  // STATE
+  // =========================
   let base = [];
-  let chartCampus = null;
-  let chartMunicipio = null;
+  let dt = null; // DataTables instance
 
-  // ====== HELPERS ======
+  // =========================
+  // HELPERS
+  // =========================
   const norm = (v) => (v ?? "").toString().trim();
 
   const uniqSorted = (arr) => {
@@ -48,24 +53,13 @@
     return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
   };
 
-  const groupCount = (rows, key) => {
-    const m = new Map();
-    for (const r of rows) {
-      const k = norm(r[key]) || "Não informado";
-      m.set(k, (m.get(k) || 0) + 1);
-    }
-    // retorna [{label,count}] ordenado desc
-    return Array.from(m.entries())
-      .map(([label, count]) => ({ label, count }))
-      .sort((a, b) => b.count - a.count);
-  };
-
-  const setSelectOptions = (selectEl, values, labelTodos = "Todos") => {
+  const setSelectOptions = (selectEl, values) => {
     if (!selectEl) return;
     selectEl.innerHTML = "";
+
     const optAll = document.createElement("option");
     optAll.value = "";
-    optAll.textContent = labelTodos;
+    optAll.textContent = "Todos";
     selectEl.appendChild(optAll);
 
     for (const v of values) {
@@ -77,9 +71,9 @@
   };
 
   const getFilters = () => ({
-    campus: norm(el.filtroCampus?.value),
-    municipio: norm(el.filtroMunicipio?.value),
-    autor: norm(el.filtroAutor?.value),
+    campus: norm(el.fCampus?.value),
+    municipio: norm(el.fMunicipio?.value),
+    autor: norm(el.fFuncao?.value),
   });
 
   const applyFilters = (rows, f) => {
@@ -91,124 +85,143 @@
     });
   };
 
-  const safeText = (s) => {
-    // evita quebrar HTML
-    const span = document.createElement("span");
-    span.textContent = s ?? "";
-    return span.innerHTML;
+  const groupCount = (rows, key) => {
+    const m = new Map();
+    for (const r of rows) {
+      const k = norm(r[key]) || "Não informado";
+      m.set(k, (m.get(k) || 0) + 1);
+    }
+    return Array.from(m.entries())
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count);
   };
 
-  const renderCards = (rows) => {
-    if (el.cardTotal) el.cardTotal.textContent = rows.length.toLocaleString("pt-BR");
+  const csvEscape = (v) => {
+    const s = norm(v);
+    // força aspas para segurança (ponto e vírgula será separador)
+    return `"${s.replace(/"/g, '""')}"`;
+  };
+
+  // =========================
+  // RENDER: KPIs
+  // =========================
+  const renderKPIs = (rows) => {
+    if (el.kpiTotal) el.kpiTotal.textContent = rows.length.toLocaleString("pt-BR");
 
     const campi = uniqSorted(rows.map((r) => r[COL.campus]));
     const municipios = uniqSorted(rows.map((r) => r[COL.municipio]));
     const autores = uniqSorted(rows.map((r) => r[COL.autor]));
 
-    if (el.cardCampi) el.cardCampi.textContent = campi.length.toLocaleString("pt-BR");
-    if (el.cardMunicipios) el.cardMunicipios.textContent = municipios.length.toLocaleString("pt-BR");
-    if (el.cardAutores) el.cardAutores.textContent = autores.length.toLocaleString("pt-BR");
+    if (el.kpiCampi) el.kpiCampi.textContent = campi.length.toLocaleString("pt-BR");
+    if (el.kpiMunicipios) el.kpiMunicipios.textContent = municipios.length.toLocaleString("pt-BR");
+    if (el.kpiOrientadores) el.kpiOrientadores.textContent = autores.length.toLocaleString("pt-BR");
+  };
+
+  // =========================
+  // RENDER: Plotly
+  // =========================
+  const renderPlotlyBar = (targetDiv, title, series, topN = 15) => {
+    if (!targetDiv) return;
+
+    const top = series.slice(0, topN);
+    const x = top.map((d) => d.label);
+    const y = top.map((d) => d.count);
+
+    const data = [
+      {
+        type: "bar",
+        x,
+        y,
+        hovertemplate: "%{x}<br>Registros: %{y}<extra></extra>",
+      },
+    ];
+
+    const layout = {
+      title: { text: title, x: 0 },
+      margin: { l: 55, r: 20, t: 60, b: 120 },
+      xaxis: { tickangle: -45, automargin: true },
+      yaxis: { rangemode: "tozero", automargin: true },
+      height: 420,
+    };
+
+    const config = {
+      displayModeBar: true,
+      responsive: true,
+    };
+
+    Plotly.react(targetDiv, data, layout, config);
   };
 
   const renderCharts = (rows) => {
     const byCampus = groupCount(rows, COL.campus);
     const byMunicipio = groupCount(rows, COL.municipio);
 
-    // limita para ficar legível (ajuste como quiser)
-    const topCampus = byCampus.slice(0, 15);
-    const topMunicipio = byMunicipio.slice(0, 15);
-
-    const mkChart = (canvas, currentChart, title, dataArr) => {
-      if (!canvas) return currentChart;
-
-      if (currentChart) currentChart.destroy();
-
-      return new Chart(canvas, {
-        type: "bar",
-        data: {
-          labels: dataArr.map((x) => x.label),
-          datasets: [
-            {
-              label: "Registros",
-              data: dataArr.map((x) => x.count),
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
-            title: { display: true, text: title },
-            tooltip: { enabled: true },
-          },
-          scales: {
-            x: {
-              ticks: {
-                autoSkip: false,
-                maxRotation: 60,
-                minRotation: 0,
-              },
-            },
-            y: {
-              beginAtZero: true,
-              ticks: {
-                precision: 0,
-              },
-            },
-          },
-        },
-      });
-    };
-
-    chartCampus = mkChart(el.canvasCampus, chartCampus, "Registros por Campus (Top 15)", topCampus);
-    chartMunicipio = mkChart(el.canvasMunicipio, chartMunicipio, "Registros por Município (Top 15)", topMunicipio);
+    renderPlotlyBar(el.chartCampus, "Registros por Campus (Top 15)", byCampus, 15);
+    renderPlotlyBar(el.chartMunicipio, "Registros por Município (Top 15)", byMunicipio, 15);
   };
 
-  const renderTable = (rows) => {
-    if (!el.tbody) return;
+  // =========================
+  // RENDER: DataTables
+  // =========================
+  const getTableColumns = () => ([
+    { title: "Data início", data: COL.dataInicio },
+    { title: "Campus", data: COL.campus },
+    { title: "Município", data: COL.municipio },
+    { title: "Autor/Função", data: COL.autor },
+    { title: "Status", data: COL.status },
+    { title: "Código Edocs", data: COL.edocs },
+    { title: "Processo florestal nº", data: COL.processo },
+    { title: "Empreendimento nº", data: COL.empreendimento },
+    { title: "Data última atualização", data: COL.dataUltStatus },
+  ]);
 
-    // Colunas que vão aparecer na “Base completa”
-    const cols = [
-      COL.dataInicio,
-      COL.campus,
-      COL.municipio,
-      COL.autor,
-      COL.status,
-      COL.edocs,
-      COL.processo,
-      COL.empreendimento,
-      COL.dataUltStatus,
-    ];
+  const initOrUpdateTable = (rows) => {
+    if (!el.dataTable) return;
 
-    // (opcional) ordena por data de início “dd/mm/aa” como texto (mantém simples)
-    const sorted = [...rows];
+    const columns = getTableColumns();
 
-    const html = sorted
-      .slice(0, 500) // evita travar navegador; aumente se quiser
-      .map((r) => {
-        const tds = cols.map((c) => `<td>${safeText(norm(r[c]))}</td>`).join("");
-        return `<tr>${tds}</tr>`;
-      })
-      .join("");
+    // Se já existe DataTable, apenas atualiza dados
+    if (dt) {
+      dt.clear();
+      dt.rows.add(rows);
+      dt.draw();
+      return;
+    }
 
-    el.tbody.innerHTML = html;
+    // Criar DataTable
+    dt = $(el.dataTable).DataTable({
+      data: rows,
+      columns,
+      pageLength: 25,
+      lengthMenu: [10, 25, 50, 100, 200],
+      order: [],
+
+      // idioma PT-BR simples (sem depender de URL externa)
+      language: {
+        search: "Buscar:",
+        lengthMenu: "Mostrar _MENU_ registros",
+        info: "Mostrando _START_ a _END_ de _TOTAL_",
+        infoEmpty: "Mostrando 0 a 0 de 0",
+        infoFiltered: "(filtrado de _MAX_ no total)",
+        zeroRecords: "Nenhum registro encontrado",
+        paginate: { first: "Primeiro", last: "Último", next: "Próximo", previous: "Anterior" }
+      },
+    });
   };
 
-  const refresh = () => {
-    const f = getFilters();
-    const recorte = applyFilters(base, f);
+  // =========================
+  // EXPORT CSV (recorte filtrado)
+  // =========================
+  const exportFilteredCSV = (rows) => {
+    const columns = getTableColumns().map((c) => c.data);
 
-    renderCards(recorte);
-    renderCharts(recorte);
-    renderTable(recorte);
-  };
+    const header = columns.map(csvEscape).join(";");
 
-  const exportCSV = () => {
-    const f = getFilters();
-    const recorte = applyFilters(base, f);
+    const lines = rows.map((r) => {
+      return columns.map((col) => csvEscape(r[col])).join(";");
+    });
 
-    const csv = Papa.unparse(recorte, { quotes: true, delimiter: ";" });
+    const csv = [header, ...lines].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
 
@@ -221,21 +234,21 @@
     URL.revokeObjectURL(url);
   };
 
-  const wireEvents = () => {
-    el.filtroCampus?.addEventListener("change", refresh);
-    el.filtroMunicipio?.addEventListener("change", refresh);
-    el.filtroAutor?.addEventListener("change", refresh);
+  // =========================
+  // REFRESH (aplica filtros e atualiza tudo)
+  // =========================
+  const refresh = () => {
+    const f = getFilters();
+    const recorte = applyFilters(base, f);
 
-    el.btnLimpar?.addEventListener("click", () => {
-      if (el.filtroCampus) el.filtroCampus.value = "";
-      if (el.filtroMunicipio) el.filtroMunicipio.value = "";
-      if (el.filtroAutor) el.filtroAutor.value = "";
-      refresh();
-    });
-
-    el.btnExportar?.addEventListener("click", exportCSV);
+    renderKPIs(recorte);
+    renderCharts(recorte);
+    initOrUpdateTable(recorte);
   };
 
+  // =========================
+  // LOAD CSV
+  // =========================
   const loadCSV = async () => {
     return new Promise((resolve, reject) => {
       Papa.parse(CSV_URL, {
@@ -254,31 +267,70 @@
   };
 
   const initFilters = (rows) => {
-    setSelectOptions(el.filtroCampus, uniqSorted(rows.map((r) => r[COL.campus])), "Todos");
-    setSelectOptions(el.filtroMunicipio, uniqSorted(rows.map((r) => r[COL.municipio])), "Todos");
-    setSelectOptions(el.filtroAutor, uniqSorted(rows.map((r) => r[COL.autor])), "Todos");
+    setSelectOptions(el.fCampus, uniqSorted(rows.map((r) => r[COL.campus])));
+    setSelectOptions(el.fMunicipio, uniqSorted(rows.map((r) => r[COL.municipio])));
+    setSelectOptions(el.fFuncao, uniqSorted(rows.map((r) => r[COL.autor])));
   };
 
-  // ====== BOOT ======
+  const wireEvents = () => {
+    el.fCampus?.addEventListener("change", refresh);
+    el.fMunicipio?.addEventListener("change", refresh);
+    el.fFuncao?.addEventListener("change", refresh);
+
+    el.btnLimpar?.addEventListener("click", () => {
+      if (el.fCampus) el.fCampus.value = "";
+      if (el.fMunicipio) el.fMunicipio.value = "";
+      if (el.fFuncao) el.fFuncao.value = "";
+      refresh();
+    });
+
+    el.btnDownloadCSV?.addEventListener("click", () => {
+      const f = getFilters();
+      const recorte = applyFilters(base, f);
+      exportFilteredCSV(recorte);
+    });
+
+    // Plotly responsivo em resize
+    window.addEventListener("resize", () => {
+      if (el.chartCampus) Plotly.Plots.resize(el.chartCampus);
+      if (el.chartMunicipio) Plotly.Plots.resize(el.chartMunicipio);
+    });
+  };
+
+  // =========================
+  // BOOT
+  // =========================
   document.addEventListener("DOMContentLoaded", async () => {
     try {
       wireEvents();
 
       base = await loadCSV();
 
-      // Normaliza: garante strings (evita undefined)
-      base = base.map((r) => {
-        const out = {};
-        for (const k of Object.keys(r)) out[k] = norm(r[k]);
-        return out;
-      });
+      // Normaliza: garante strings e remove linhas totalmente vazias
+      base = base
+        .map((r) => {
+          const out = {};
+          for (const k of Object.keys(r)) out[k] = norm(r[k]);
+          return out;
+        })
+        .filter((r) => {
+          // considera "linha útil" se ao menos 1 campo relevante existir
+          return (
+            norm(r[COL.campus]) ||
+            norm(r[COL.municipio]) ||
+            norm(r[COL.autor]) ||
+            norm(r[COL.status]) ||
+            norm(r[COL.edocs]) ||
+            norm(r[COL.processo]) ||
+            norm(r[COL.empreendimento])
+          );
+        });
 
       initFilters(base);
       refresh();
     } catch (e) {
       console.error("Falha ao carregar o CSV:", e);
-      // opcional: mostrar msg na UI
-      if (el.cardTotal) el.cardTotal.textContent = "Erro";
+      if (el.kpiTotal) el.kpiTotal.textContent = "Erro";
     }
   });
 })();
