@@ -108,6 +108,21 @@
       font-size: 13px;
       margin-top: 6px;
     }
+
+  /* AUMENTA A LARGURA ÚTIL DO RELATÓRIO */
+  .container {
+    max-width: 1600px;   /* pode testar 1500, 1600 ou 1700 */
+  }
+
+  /* Dá mais “respiro” horizontal aos gráficos */
+  .charts-grid {
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  }
+
+  /* Gráficos um pouco mais altos e legíveis */
+  .chart-card div[id^="chart"] {
+    height: 320px !important;
+  }  
   </style>
 </head>
 
