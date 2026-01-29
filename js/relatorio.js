@@ -431,50 +431,50 @@
   // =========================
   // Pager UI (tabela)
   // =========================
-  const ensurePager = () => {
-    if (!el?.pivotHead) return null;
+const ensurePager = () => {
+  if (!el?.pivotHead) return null;
 
-    let pager = document.getElementById("pivotPager");
-    if (pager) return pager;
+  let pager = document.getElementById("pivotPager");
+  if (pager) return pager;
 
-    pager = document.createElement("div");
-    pager.id = "pivotPager";
-    pager.style.display = "flex";
-    pager.style.gap = "10px";
-    pager.style.alignItems = "center";
-    pager.style.justifyContent = "flex-end";
-    pager.style.margin = "8px 0 10px";
+  pager = document.createElement("div");
+  pager.id = "pivotPager";
+  pager.style.display = "flex";
+  pager.style.gap = "10px";
+  pager.style.alignItems = "center";
+  pager.style.justifyContent = "flex-end";
+  pager.style.margin = "8px 0 10px";
 
-    pager.innerHTML = `
-      <button id="btnPrevPage" class="btn" type="button">Anterior</button>
-      <span id="pageInfo" style="font-weight:600; opacity:.85;"></span>
-      <button id="btnNextPage" class="btn" type="button">Próximo</button>
-    `;
+  pager.innerHTML = `
+    <button id="btnPrevPage" class="btn" type="button">Anterior</button>
+    <span id="pageInfo" style="font-weight:600; opacity:.85;"></span>
+    <button id="btnNextPage" class="btn" type="button">Próximo</button>
+  `;
 
-    // tenta inserir acima da tabela (antes do thead)
-    const thead = el.pivotHead.parentElement; // <thead>
-    const table = thead?.parentElement;       // <table>
-    if (table && table.parentElement) {
-      table.parentElement.insertBefore(pager, table);
-    } else {
-      // fallback: só anexa no body
-      document.body.appendChild(pager);
-    }
+  // ✅ Encontra a tabela real, independente se pivotHead é <thead> ou <tr>
+  const table = el.pivotHead.closest("table");
+  if (table && table.parentElement) {
+    table.parentElement.insertBefore(pager, table);
+  } else {
+    // fallback: coloca no topo do container principal
+    (document.querySelector("main") || document.body).prepend(pager);
+  }
 
-    pager.querySelector("#btnPrevPage").addEventListener("click", () => {
-      if (pageIndex > 0) {
-        pageIndex--;
-        refresh();
-      }
-    });
-
-    pager.querySelector("#btnNextPage").addEventListener("click", () => {
-      pageIndex++;
+  pager.querySelector("#btnPrevPage").addEventListener("click", () => {
+    if (pageIndex > 0) {
+      pageIndex--;
       refresh();
-    });
+    }
+  });
 
-    return pager;
-  };
+  pager.querySelector("#btnNextPage").addEventListener("click", () => {
+    pageIndex++;
+    refresh();
+  });
+
+  return pager;
+};
+
 
   // =========================
   // HEATMAP
