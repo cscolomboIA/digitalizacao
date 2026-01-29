@@ -138,6 +138,16 @@
     ["cachoeiro de itapemerim", "Cachoeiro de Itapemirim"],
     ["cachoeiro de itapemirim es", "Cachoeiro de Itapemirim"],
     ["cachoeiro de itapemirim - es", "Cachoeiro de Itapemirim"],
+    ["Cachoeiro de Itapemirim - Es", "Cachoeiro de Itapemirim"],
+    ["Divino de São Lourenço", "Divino de São Lourenço - ES"],
+    ["Dores do Rio Preto", "Dores do Rio Preto - ES"],
+    ["Guaçuí", "Guaçuí - ES"],
+    ["Guaçuí", "Guaçuí- ES"],
+    ["Ibitirama", "Ibitirama - ES"],
+    ["Jerônimo Monteiro", "Jerônimo Monteiro - ES"],
+    ["Muniz Freire", "Muniz Freire - ES"],
+    ["Vila Velha", "Vila Velha - ES"],
+    ["Vitória", "Vitória - ES"],
   ]);
 
   const normalizeMunicipio = (raw) => {
