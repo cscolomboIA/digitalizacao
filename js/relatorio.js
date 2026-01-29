@@ -67,8 +67,63 @@
     });
   };
 
+  // =========================
+  // NORMALIZAÇÃO DE MUNICÍPIOS
+  // =========================
+
+  // Mapa de correções explícitas (chave em "forma canônica simplificada")
+  const MUNICIPIO_FIX = new Map([
+    // Cachoeiro (variações)
+    ["cachoeiro de itapemerim", "Cachoeiro de Itapemirim"],
+    ["cachoeiro de itapemirim es", "Cachoeiro de Itapemirim"],
+    ["cachoeiro de itapemirim - es", "Cachoeiro de Itapemirim"],
+    ["cachoeiro de itapemirim", "Cachoeiro de Itapemirim"],
+
+    // Exemplos (adicione outros aqui se aparecerem)
+    // ["vitoria", "Vitória"],
+    // ["sao mateus", "São Mateus"],
+  ]);
+
+  // Remove acentos e normaliza para comparar
+  const simplify = (s) => {
+    return norm(s)
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  };
+
+  const normalizeMunicipio = (raw) => {
+    let v = norm(raw);
+    if (!v) return "";
+
+    // 1) remove sufixos comuns tipo " - ES", "(ES)", "/ES" etc
+    v = v
+      .replace(/\s*-\s*ES\s*$/i, "")
+      .replace(/\s*\(\s*ES\s*\)\s*$/i, "")
+      .replace(/\s*\/\s*ES\s*$/i, "")
+      .trim();
+
+    // 2) corrige erro de digitação específico (sem depender de acento)
+    // (faz substituição direta antes de aplicar mapa)
+    v = v.replace(/Itapemerim/gi, "Itapemirim");
+
+    // 3) aplica mapa de correções por forma simplificada
+    const key = simplify(v);
+    if (MUNICIPIO_FIX.has(key)) return MUNICIPIO_FIX.get(key);
+
+    // 4) retorno padrão: mantém como veio (mas já sem "- ES")
+    return v;
+  };
+
+  // =========================
+  // NORMALIZAÇÃO DE STATUS
+  // =========================
   const statusNormalize = (s) => norm(s);
 
+  // =========================
+  // DIM / FILTERS
+  // =========================
   const getDimKey = () => {
     const d = norm(el.dimensao?.value);
     if (d === "campus") return COL.campus;
@@ -96,7 +151,9 @@
     });
   };
 
-  // ---------- pivot ----------
+  // =========================
+  // PIVOT
+  // =========================
   const buildPivot = (rows, dimKey, dimValue) => {
     const pivot = new Map();
 
@@ -120,18 +177,19 @@
 
     let arr = Array.from(pivot.entries()).map(([label, counts]) => ({ label, ...counts }));
 
-    // ✅ ORDENAR MUNICÍPIOS EM ORDEM ALFABÉTICA
+    // Município em ordem alfabética (A→Z); demais por total desc
     if (dimValue === "municipio") {
       arr.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
     } else {
-      // padrão: total desc
       arr.sort((a, b) => (b.__total || 0) - (a.__total || 0));
     }
 
     return arr;
   };
 
-  // ---------- heatmap ----------
+  // =========================
+  // HEATMAP
+  // =========================
   const lerp = (a, b, t) => a + (b - a) * t;
 
   const heatColor = (value, min, max) => {
@@ -221,7 +279,9 @@
     `;
   };
 
-  // ---------- charts ----------
+  // =========================
+  // CHARTS
+  // =========================
   const renderChart = (targetDiv, title, xLabels, yValues) => {
     if (!targetDiv) return;
 
@@ -257,7 +317,9 @@
     renderChart(el.chart05, `05 - Sem parecer versus ${dimLabel}`,           x, series(STATUS_KEYS[4].key));
   };
 
-  // ---------- KPIs ----------
+  // =========================
+  // KPIs + Filters
+  // =========================
   const renderKPIs = (rows, pivotRowsShown) => {
     if (el.kpiTotal) el.kpiTotal.textContent = rows.length.toLocaleString("pt-BR");
     if (el.kpiLinhas) el.kpiLinhas.textContent = pivotRowsShown.toLocaleString("pt-BR");
@@ -285,7 +347,9 @@
     fillSelect(el.filtroMunicipio, uniqSorted(rows.map(r => r[COL.municipio])));
   };
 
-  // ---------- refresh ----------
+  // =========================
+  // REFRESH
+  // =========================
   const refresh = () => {
     const dimKey = getDimKey();
     const dimValue = getDimValue();
@@ -304,7 +368,6 @@
     renderPivotTable(pivot, dimLabel, topN);
     renderCharts(pivot, dimLabel, topN);
 
-    // garante ajuste de tamanho
     setTimeout(() => {
       [el.chart01, el.chart02, el.chart03, el.chart04, el.chart05].forEach(div => {
         if (div) Plotly.Plots.resize(div);
@@ -327,17 +390,20 @@
     window.addEventListener("resize", () => refresh());
   };
 
-  // ---------- boot ----------
+  // =========================
+  // BOOT
+  // =========================
   document.addEventListener("DOMContentLoaded", async () => {
     try {
       wireEvents();
       base = await loadCSV();
 
+      // normaliza município ANTES de filtros/pivôs
       base = base
         .map(r => ({
           ...r,
           [COL.campus]: norm(r[COL.campus]),
-          [COL.municipio]: norm(r[COL.municipio]),
+          [COL.municipio]: normalizeMunicipio(r[COL.municipio]),
           [COL.orientador]: norm(r[COL.orientador]),
           [COL.status]: statusNormalize(r[COL.status]),
         }))
