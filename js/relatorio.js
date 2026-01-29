@@ -1,11 +1,7 @@
 // js/relatorio.js
 (() => {
-  // =========================
-  // CONFIG
-  // =========================
   const CSV_URL = "data/TODOS_DADOS_UNIFICADOS.csv";
 
-  // Colunas do CSV
   const COL = {
     campus: "Campus",
     municipio: "Município",
@@ -13,7 +9,6 @@
     status: "Status",
   };
 
-  // Status esperados (ordem e rótulos como nas imagens)
   const STATUS_KEYS = [
     { key: "01 - Digitalizado e Autuado", short: "01", label: "01 - Digitalizado e Autuado" },
     { key: "02 - Reprovado",             short: "02", label: "02 - Reprovado" },
@@ -22,9 +17,6 @@
     { key: "05 - Sem parecer",          short: "05", label: "05 - Sem parecer" },
   ];
 
-  // =========================
-  // DOM
-  // =========================
   const el = {
     dimensao: document.getElementById("dimensao"),
     topN: document.getElementById("topN"),
@@ -51,14 +43,8 @@
     chart05: document.getElementById("chart05"),
   };
 
-  // =========================
-  // STATE
-  // =========================
   let base = [];
 
-  // =========================
-  // HELPERS
-  // =========================
   const norm = (v) => (v ?? "").toString().trim();
 
   const uniqSorted = (arr) => {
@@ -81,19 +67,20 @@
     });
   };
 
-  const statusNormalize = (s) => {
-    const v = norm(s);
-    // Se vier com variações, tenta encaixar
-    // Ex.: "01 - Digitalizado e Autuado" (ok)
-    // Caso venha algo levemente diferente, você pode ampliar aqui.
-    return v;
-  };
+  const statusNormalize = (s) => norm(s);
 
   const getDimKey = () => {
     const d = norm(el.dimensao?.value);
     if (d === "campus") return COL.campus;
     if (d === "municipio") return COL.municipio;
-    return COL.orientador; // orientador
+    return COL.orientador;
+  };
+
+  const getDimValue = () => norm(el.dimensao?.value);
+
+  const getDimLabel = () => {
+    const v = getDimValue();
+    return v === "campus" ? "Campus" : v === "municipio" ? "Município" : "Orientador";
   };
 
   const getFilters = () => ({
@@ -109,11 +96,8 @@
     });
   };
 
-  // =========================
-  // PIVOT
-  // =========================
-  const buildPivot = (rows, dimKey) => {
-    // pivot[rowLabel][statusKey] = count
+  // ---------- pivot ----------
+  const buildPivot = (rows, dimKey, dimValue) => {
     const pivot = new Map();
 
     for (const r of rows) {
@@ -131,43 +115,38 @@
       if (obj[st] !== undefined) {
         obj[st] += 1;
         obj.__total += 1;
-      } else {
-        // status fora do esperado -> ignora (ou você pode criar coluna “Outros”)
-        // aqui vamos ignorar para manter igual às imagens
       }
     }
 
-    // transforma em array e ordena por total desc
-    const arr = Array.from(pivot.entries())
-      .map(([label, counts]) => ({ label, ...counts }))
-      .sort((a, b) => (b.__total || 0) - (a.__total || 0));
+    let arr = Array.from(pivot.entries()).map(([label, counts]) => ({ label, ...counts }));
+
+    // ✅ ORDENAR MUNICÍPIOS EM ORDEM ALFABÉTICA
+    if (dimValue === "municipio") {
+      arr.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+    } else {
+      // padrão: total desc
+      arr.sort((a, b) => (b.__total || 0) - (a.__total || 0));
+    }
 
     return arr;
   };
 
-  // =========================
-  // HEATMAP COLOR
-  // (aproxima a lógica do Sheets: baixo = vermelho, alto = verde)
-  // =========================
+  // ---------- heatmap ----------
   const lerp = (a, b, t) => a + (b - a) * t;
 
   const heatColor = (value, min, max) => {
     if (max <= min) return "rgba(255,255,255,0)";
+    const t = (value - min) / (max - min);
 
-    const t = (value - min) / (max - min); // 0..1
-    // cores: vermelho -> amarelo -> verde
-    // vamos interpolar em 2 fases
     const mid = 0.5;
-
     let r, g, b;
+
     if (t <= mid) {
-      // vermelho(232,110,97) -> amarelo(250,215,105)
       const tt = t / mid;
       r = lerp(232, 250, tt);
       g = lerp(110, 215, tt);
       b = lerp(97, 105, tt);
     } else {
-      // amarelo(250,215,105) -> verde(120,200,155)
       const tt = (t - mid) / (1 - mid);
       r = lerp(250, 120, tt);
       g = lerp(215, 200, tt);
@@ -177,13 +156,15 @@
     return `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},0.95)`;
   };
 
-  // =========================
-  // RENDER: Pivot Table
-  // =========================
+  const escapeHtml = (s) => {
+    const span = document.createElement("span");
+    span.textContent = s ?? "";
+    return span.innerHTML;
+  };
+
   const renderPivotTable = (pivotRows, dimLabel, topN) => {
     const rows = pivotRows.slice(0, topN);
 
-    // min/max por coluna (para heatmap por coluna, como no Sheets)
     const mins = {};
     const maxs = {};
     for (const s of STATUS_KEYS) {
@@ -198,18 +179,15 @@
       if (maxs[s.key] === -Infinity) maxs[s.key] = 0;
     }
 
-    // Header
-    const headHtml = `
+    el.pivotHead.innerHTML = `
       <tr>
         <th>${dimLabel}</th>
         ${STATUS_KEYS.map(s => `<th>${s.label}</th>`).join("")}
         <th>Total</th>
       </tr>
     `;
-    el.pivotHead.innerHTML = headHtml;
 
-    // Body
-    const bodyHtml = rows.map(r => {
+    el.pivotBody.innerHTML = rows.map(r => {
       const cells = STATUS_KEYS.map(s => {
         const v = r[s.key] || 0;
         const bg = heatColor(v, mins[s.key], maxs[s.key]);
@@ -225,9 +203,6 @@
       `;
     }).join("");
 
-    el.pivotBody.innerHTML = bodyHtml;
-
-    // Footer totals (col totals + total geral)
     const colTotals = {};
     for (const s of STATUS_KEYS) colTotals[s.key] = 0;
     let grand = 0;
@@ -237,25 +212,16 @@
       grand += (r.__total || 0);
     }
 
-    const footHtml = `
+    el.pivotFoot.innerHTML = `
       <tr>
         <th>Total</th>
         ${STATUS_KEYS.map(s => `<td class="cell-num">${colTotals[s.key]}</td>`).join("")}
         <td class="cell-num">${grand}</td>
       </tr>
     `;
-    el.pivotFoot.innerHTML = footHtml;
   };
 
-  const escapeHtml = (s) => {
-    const span = document.createElement("span");
-    span.textContent = s ?? "";
-    return span.innerHTML;
-  };
-
-  // =========================
-  // RENDER: Charts (01..05 versus dimensão)
-  // =========================
+  // ---------- charts ----------
   const renderChart = (targetDiv, title, xLabels, yValues) => {
     if (!targetDiv) return;
 
@@ -270,7 +236,7 @@
 
     const layout = {
       title: { text: title, x: 0 },
-      margin: { l: 60, r: 20, t: 60, b: 90 },
+      margin: { l: 60, r: 20, t: 60, b: 100 },
       xaxis: { tickangle: -45, automargin: true },
       yaxis: { rangemode: "tozero", automargin: true },
       height: 260,
@@ -282,7 +248,6 @@
   const renderCharts = (pivotRows, dimLabel, topN) => {
     const rows = pivotRows.slice(0, topN);
     const x = rows.map(r => r.label);
-
     const series = (statusKey) => rows.map(r => r[statusKey] || 0);
 
     renderChart(el.chart01, `01 - Digitalizado e Autuado versus ${dimLabel}`, x, series(STATUS_KEYS[0].key));
@@ -292,9 +257,7 @@
     renderChart(el.chart05, `05 - Sem parecer versus ${dimLabel}`,           x, series(STATUS_KEYS[4].key));
   };
 
-  // =========================
-  // KPIs
-  // =========================
+  // ---------- KPIs ----------
   const renderKPIs = (rows, pivotRowsShown) => {
     if (el.kpiTotal) el.kpiTotal.textContent = rows.length.toLocaleString("pt-BR");
     if (el.kpiLinhas) el.kpiLinhas.textContent = pivotRowsShown.toLocaleString("pt-BR");
@@ -304,17 +267,6 @@
 
     if (el.kpiCampi) el.kpiCampi.textContent = campi.length.toLocaleString("pt-BR");
     if (el.kpiMunicipios) el.kpiMunicipios.textContent = municipios.length.toLocaleString("pt-BR");
-  };
-
-  // =========================
-  // FILTER DROPDOWNS
-  // =========================
-  const initFilterOptions = (rows) => {
-    const campi = uniqSorted(rows.map(r => r[COL.campus]));
-    const municipios = uniqSorted(rows.map(r => r[COL.municipio]));
-
-    fillSelect(el.filtroCampus, campi);
-    fillSelect(el.filtroMunicipio, municipios);
   };
 
   const fillSelect = (selectEl, values) => {
@@ -328,36 +280,31 @@
     }
   };
 
-  // =========================
-  // REFRESH
-  // =========================
+  const initFilterOptions = (rows) => {
+    fillSelect(el.filtroCampus, uniqSorted(rows.map(r => r[COL.campus])));
+    fillSelect(el.filtroMunicipio, uniqSorted(rows.map(r => r[COL.municipio])));
+  };
+
+  // ---------- refresh ----------
   const refresh = () => {
     const dimKey = getDimKey();
-    const dimValue = norm(el.dimensao?.value);
-    const dimLabel =
-      dimValue === "campus" ? "Campus" :
-      dimValue === "municipio" ? "Município" :
-      "Orientador";
-
+    const dimValue = getDimValue();
+    const dimLabel = getDimLabel();
     const topN = parseInt(norm(el.topN?.value) || "30", 10);
 
     const f = getFilters();
     const recorte = applyFilters(base, f);
 
-    const pivot = buildPivot(recorte, dimKey);
+    const pivot = buildPivot(recorte, dimKey, dimValue);
 
-    // Atualiza títulos
     if (el.tituloTabela) el.tituloTabela.textContent = `${dimLabel} · Pivô (01..05 + Total)`;
     if (el.tituloGraficos) el.tituloGraficos.textContent = `${dimLabel} · Gráficos por Status`;
 
-    // KPIs
     renderKPIs(recorte, Math.min(pivot.length, topN));
-
-    // Tabela + charts
     renderPivotTable(pivot, dimLabel, topN);
     renderCharts(pivot, dimLabel, topN);
 
-    // Resize Plotly (segurança)
+    // garante ajuste de tamanho
     setTimeout(() => {
       [el.chart01, el.chart02, el.chart03, el.chart04, el.chart05].forEach(div => {
         if (div) Plotly.Plots.resize(div);
@@ -365,9 +312,6 @@
     }, 50);
   };
 
-  // =========================
-  // EVENTS
-  // =========================
   const wireEvents = () => {
     el.dimensao?.addEventListener("change", refresh);
     el.topN?.addEventListener("change", refresh);
@@ -383,15 +327,12 @@
     window.addEventListener("resize", () => refresh());
   };
 
-  // =========================
-  // BOOT
-  // =========================
+  // ---------- boot ----------
   document.addEventListener("DOMContentLoaded", async () => {
     try {
       wireEvents();
       base = await loadCSV();
 
-      // normaliza campos essenciais
       base = base
         .map(r => ({
           ...r,
@@ -400,7 +341,7 @@
           [COL.orientador]: norm(r[COL.orientador]),
           [COL.status]: statusNormalize(r[COL.status]),
         }))
-        .filter(r => r[COL.status]); // mantém linhas com status
+        .filter(r => r[COL.status]);
 
       initFilterOptions(base);
       refresh();
