@@ -121,3 +121,76 @@ select{border:1px solid var(--border);padding:8px;border-radius:8px;background:#
   font-weight: 600;
 }
 
+/* ==========================================
+   Ajustes finos – Tabela Pivô do Relatório
+   ========================================== */
+
+/* Tabela mais compacta */
+#pivotHead th,
+#pivotBody td,
+#pivotBody th,
+#pivotFoot td,
+#pivotFoot th {
+  padding: 6px 8px;          /* menos espaço interno */
+  font-size: 13px;           /* levemente menor */
+  line-height: 1.2;
+  white-space: nowrap;       /* evita quebra de linha */
+}
+
+/* Colunas numéricas mais estreitas */
+#pivotBody td.cell-num,
+#pivotFoot td.cell-num {
+  min-width: 56px;
+  max-width: 70px;
+}
+
+/* Primeira coluna (Orientador / Município / Campus) */
+#pivotHead th:first-child,
+#pivotBody th,
+#pivotFoot th {
+  min-width: 220px;
+  max-width: 260px;
+  text-align: center;
+}
+
+/* Delimitação vertical sutil entre colunas */
+#pivotHead th,
+#pivotBody td,
+#pivotBody th,
+#pivotFoot td,
+#pivotFoot th {
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* Remove borda da última coluna */
+#pivotHead th:last-child,
+#pivotBody td:last-child,
+#pivotBody th:last-child,
+#pivotFoot td:last-child,
+#pivotFoot th:last-child {
+  border-right: none;
+}
+
+/* Delimitação horizontal sutil entre linhas */
+#pivotBody tr,
+#pivotFoot tr {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* Cabeçalho um pouco mais definido */
+#pivotHead th {
+  border-bottom: 2px solid rgba(0, 0, 0, 0.15);
+}
+
+/* Hover suave (já tínhamos, mas ajustado) */
+#pivotBody tr:hover {
+  background-color: rgba(0, 0, 0, 0.035);
+}
+
+/* Total (última coluna) com leve destaque */
+#pivotBody td:last-child,
+#pivotFoot td:last-child {
+  font-weight: 700;
+}
+
+
