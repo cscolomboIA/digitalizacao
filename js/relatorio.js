@@ -211,6 +211,7 @@ const normalizeMunicipio = (raw) => {
   return v;
 };
 
+  window.normalizeMunicipio = normalizeMunicipio;
   
   const CAMPUS_MAP = new Map(CAMPUS_CANON.map(n => [simplify(n), n]));
 
