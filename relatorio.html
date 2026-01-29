@@ -8,25 +8,18 @@
   <link rel="icon" type="image/png" href="favicon.png"/>
   <link rel="stylesheet" href="style.css"/>
 
-  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
-
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
   <style>
-    /* Apenas o necessário para ficar bem parecido com as imagens */
-    .report-grid {
-      display: grid;
-      grid-template-columns: 1.25fr 1fr;
+    /* Layout: tabela em cima, gráficos abaixo (mais legível) */
+    .report-stack {
+      display: flex;
+      flex-direction: column;
       gap: 16px;
-      align-items: start;
-    }
-    @media (max-width: 1100px) {
-      .report-grid { grid-template-columns: 1fr; }
     }
 
     .pivot-wrap {
@@ -45,7 +38,7 @@
     table.pivot thead th {
       position: sticky;
       top: 0;
-      background: #0f3d33; /* parecido com o verde do Google Sheets */
+      background: #0f3d33;
       color: #fff;
       padding: 10px 10px;
       text-align: left;
@@ -74,7 +67,7 @@
     }
 
     .cell-num {
-      text-align: left; /* nas imagens o número fica mais “colado” à esquerda */
+      text-align: left;
       font-variant-numeric: tabular-nums;
     }
 
@@ -89,8 +82,25 @@
       min-width: 220px;
     }
 
-    .charts-stack .panel {
-      margin-bottom: 14px;
+    /* Gráficos em cards abaixo da tabela */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .chart-card {
+      border-radius: 12px;
+      border: 1px solid #e7e7e7;
+      background: #fff;
+      padding: 12px;
+    }
+    .chart-title {
+      font-weight: 700;
+      margin: 0 0 8px 0;
+      color: #1d2b2b;
+      font-size: 15px;
     }
 
     .hint {
@@ -113,7 +123,7 @@
   <a href="index.html">Dashboard</a>
   <a href="map.html">Mapa ES</a>
   <a href="gestao.html">Painel de Gestão</a>
-  <a href="relatorio.html">Relatório</a>
+  <a href="relatorio.html" class="active">Relatório</a>
 </nav>
 
 <main class="container">
@@ -157,7 +167,7 @@
     </div>
 
     <div class="hint">
-      Esta página gera uma tabela no estilo “pivô” (com heatmap) e gráficos “01..05 versus dimensão”, parecidos com os do Google Sheets.
+      Tabela estilo “pivô” (heatmap) e gráficos 01..05 “versus dimensão”.
     </div>
   </section>
 
@@ -168,7 +178,8 @@
     <div class="card kpi"><div class="card-title">Municípios no Recorte</div><div id="kpiMunicipios" class="card-value">0</div></div>
   </section>
 
-  <section class="report-grid">
+  <section class="report-stack">
+    <!-- TABELA -->
     <div class="panel">
       <div class="panel-header">
         <h2 id="tituloTabela">Tabela (Pivô)</h2>
@@ -183,26 +194,37 @@
       </div>
     </div>
 
-    <div class="charts-stack">
-      <div class="panel">
-        <div class="panel-header"><h2 id="tituloGraficos">Gráficos</h2></div>
-        <div id="chart01" style="height:260px;"></div>
+    <!-- GRÁFICOS (AGORA ABAIXO DA TABELA) -->
+    <div class="panel">
+      <div class="panel-header">
+        <h2 id="tituloGraficos">Gráficos por Status</h2>
       </div>
-      <div class="panel">
-        <div class="panel-header"><h2></h2></div>
-        <div id="chart02" style="height:260px;"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-header"><h2></h2></div>
-        <div id="chart03" style="height:260px;"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-header"><h2></h2></div>
-        <div id="chart04" style="height:260px;"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-header"><h2></h2></div>
-        <div id="chart05" style="height:260px;"></div>
+
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-title">01 - Digitalizado e Autuado</div>
+          <div id="chart01" style="height:260px;"></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-title">02 - Reprovado</div>
+          <div id="chart02" style="height:260px;"></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-title">03 - Aprovado</div>
+          <div id="chart03" style="height:260px;"></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-title">04 - Cancelado</div>
+          <div id="chart04" style="height:260px;"></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-title">05 - Sem parecer</div>
+          <div id="chart05" style="height:260px;"></div>
+        </div>
       </div>
     </div>
   </section>
