@@ -280,8 +280,8 @@ const removeUfSuffix = (s) => {
     }
 
     let arr = Array.from(pivot.entries()).map(([label, counts]) => ({ label, ...counts }));
-    if (dimValue === "municipio") arr.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
-    else arr.sort((a, b) => (b.__total || 0) - (a.__total || 0));
+    // Sempre A→Z (Campus / Município / Orientador)
+    arr.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
     return arr;
   };
 
