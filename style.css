@@ -91,6 +91,11 @@ select{border:1px solid var(--border);padding:8px;border-radius:8px;background:#
   position: relative;
 }
 
+/* Destaque visual ao passar o mouse nas linhas da tabela pivô */
+#pivotBody tr:hover {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
 /* ================================
    Tabela do Relatório (Pivô)
    ================================ */
