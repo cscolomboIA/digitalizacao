@@ -565,4 +565,25 @@ const normalizeMunicipio = (raw) => {
       if (el.kpiTotal) el.kpiTotal.textContent = "Erro";
     }
   });
+
+  // ===== DEBUG: expõe funções/estado no console =====
+window.normalizeMunicipio = (raw) => {
+  try {
+    // reutiliza a função interna se existir neste escopo
+    return normalizeMunicipio(raw);
+  } catch (e) {
+    console.error("normalizeMunicipio interno não disponível:", e);
+    return raw;
+  }
+};
+
+window.__debugRelatorio = () => ({
+  hasNormalizeMunicipio: typeof normalizeMunicipio === "function",
+  hasBase: typeof base !== "undefined",
+  sampleMunicipios: (typeof base !== "undefined")
+    ? [...new Set(base.map(r => r[COL.municipio]))].slice(0, 50)
+    : []
+});
+// ===============================================
+
 })();
