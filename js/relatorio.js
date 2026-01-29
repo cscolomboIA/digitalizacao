@@ -133,22 +133,28 @@
   // índice simplificado -> nome oficial
   const ES_MUNICIPIOS_MAP = new Map(ES_MUNICIPIOS.map(n => [simplify(n), n]));
 
-  // correções explícitas (além do fuzzy)
-  const MUNICIPIO_FIX = new Map([
-    ["cachoeiro de itapemerim", "Cachoeiro de Itapemirim"],
-    ["cachoeiro de itapemirim es", "Cachoeiro de Itapemirim"],
-    ["cachoeiro de itapemirim - es", "Cachoeiro de Itapemirim"],
-    ["cachoeiro de itapemirim - es", "Cachoeiro de Itapemirim"],
-    ["divino de são lourenço - es", "Divino de São Lourenço"],
-    ["dores do rio preto - es", "Dores do Rio Preto"],
-    ["guaçuí - es", "Guaçuí"],
-    ["guaçuí- es", "Guaçuí"],
-    ["ibitirama - es", "Ibitirama"],
-    ["jerônimo monteiro - es", "Jerônimo Monteiro"],
-    ["muniz freire - es", "Muniz Freire"],
-    ["vila velha - es", "Vila Velha"],
-    ["vitória - es", "Vitória"],
-  ]);
+  // Correções explícitas (além do fuzzy)
+// Você pode escrever aqui com acento e com/sem "- ES" que o código normaliza as chaves.
+const MUNICIPIO_FIX_RAW = [
+  ["Cachoeiro de Itapemerim", "Cachoeiro de Itapemirim"],
+  ["Cachoeiro de Itapemirim - ES", "Cachoeiro de Itapemirim"],
+
+  ["Divino de São Lourenço - ES", "Divino de São Lourenço"],
+  ["Dores do Rio Preto - ES", "Dores do Rio Preto"],
+  ["Guaçuí - ES", "Guaçuí"],
+  ["Guaçuí- ES", "Guaçuí"],
+  ["Ibitirama - ES", "Ibitirama"],
+  ["Jerônimo Monteiro - ES", "Jerônimo Monteiro"],
+  ["Muniz Freire - ES", "Muniz Freire"],
+  ["Vila Velha - ES", "Vila Velha"],
+  ["Vitória - ES", "Vitória"],
+];
+
+// Normaliza as chaves do FIX para bater com o key = simplify(v) (já sem UF)
+const MUNICIPIO_FIX = new Map(
+  MUNICIPIO_FIX_RAW.map(([from, to]) => [simplify(removeUfSuffix(from)), to])
+);
+
 
 const normalizeMunicipio = (raw) => {
   if (!raw) return "";
