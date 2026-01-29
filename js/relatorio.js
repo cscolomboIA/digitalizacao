@@ -669,7 +669,7 @@ const ensurePager = () => {
     }
   };
 
-  // ✅ initFilterOptions atualizado (re-normaliza municípios no dropdown)
+  // initFilterOptions atualizado (re-normaliza municípios no dropdown)
   const initFilterOptions = (rows) => {
     const campi = uniqSorted(rows.map((r) => r[COL.campus]).filter(Boolean));
     const municipios = uniqSorted(
@@ -693,7 +693,7 @@ const ensurePager = () => {
 
     const pivot = buildPivot(recorte, dimKey);
 
-    if (el.tituloTabela) el.tituloTabela.textContent = `${dimLabel} · Pivô (01..05 + Total)`;
+    if (el.tituloTabela) el.tituloTabela.textContent = `${dimLabel} · Relatório Parcial`;
     if (el.tituloGraficos) el.tituloGraficos.textContent = `${dimLabel} · Gráficos por Status`;
 
     // KPI "linhas" mostra quantas linhas existiriam ao todo (não só a página)
