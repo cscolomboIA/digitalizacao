@@ -17,7 +17,191 @@
     { key: "05 - Sem parecer",          short: "05", label: "05 - Sem parecer" },
   ];
 
-  const el = {
+  let base = [];
+  let el = null; // <- só inicializa depois que o DOM existir
+
+  // -------------------------
+  // Utils
+  // -------------------------
+  const norm = (v) => (v ?? "").toString().trim();
+
+  const simplify = (s) =>
+    norm(s)
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[\s\-_/]+/g, " ")
+      .trim()
+      .toLowerCase();
+
+  const removeUfSuffix = (s) => {
+    let v = norm(s);
+    if (!v) return "";
+    return v
+      .replace(/\s*-\s*ES\s*$/i, "")
+      .replace(/\s*\(\s*ES\s*\)\s*$/i, "")
+      .replace(/\s*\/\s*ES\s*$/i, "")
+      .replace(/\s*-\s*E\s*S\s*$/i, "")
+      .trim();
+  };
+
+  const uniqSorted = (arr) => {
+    const set = new Set(arr.map(norm).filter(Boolean));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  };
+
+  // ✅ getField (tolerante a variações de header: acento/case)
+  const getField = (row, ...names) => {
+    // 1) tentativa direta
+    for (const n of names) {
+      if (row && row[n] != null && String(row[n]).trim() !== "") return row[n];
+    }
+    // 2) fallback por simplify
+    const keys = row ? Object.keys(row) : [];
+    const wanted = names.map(simplify);
+    for (const k of keys) {
+      if (wanted.includes(simplify(k))) return row[k];
+    }
+    return "";
+  };
+
+  const loadCSV = () => new Promise((resolve, reject) => {
+    if (typeof Papa === "undefined") {
+      reject(new Error("PapaParse (Papa) não carregou. Verifique os <script> do HTML."));
+      return;
+    }
+    Papa.parse(CSV_URL, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        if (results?.errors?.length) console.error("Erros CSV:", results.errors);
+        resolve(results.data || []);
+      },
+      error: (err) => reject(err),
+    });
+  });
+
+  // -------------------------
+  // Levenshtein (fuzzy)
+  // -------------------------
+  const levenshtein = (a, b) => {
+    a = simplify(a);
+    b = simplify(b);
+    const m = a.length, n = b.length;
+    if (m === 0) return n;
+    if (n === 0) return m;
+
+    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+      }
+    }
+    return dp[m][n];
+  };
+
+  // =========================
+  // MUNICÍPIOS (ES)
+  // =========================
+  const ES_MUNICIPIOS = [
+    "Afonso Cláudio","Águia Branca","Alegre","Alfredo Chaves","Alto Rio Novo","Anchieta","Apiacá","Aracruz",
+    "Atílio Vivácqua","Baixo Guandu","Barra de São Francisco","Boa Esperança","Bom Jesus do Norte","Brejetuba",
+    "Cachoeiro de Itapemirim","Cariacica","Castelo","Colatina","Conceição da Barra","Conceição do Castelo",
+    "Divino de São Lourenço","Domingos Martins","Dores do Rio Preto","Ecoporanga","Fundão","Governador Lindenberg",
+    "Guaçuí","Guarapari","Ibatiba","Ibiraçu","Ibitirama","Iconha","Irupi","Itaguaçu","Itapemirim","Itarana","Iúna",
+    "Jaguaré","Jerônimo Monteiro","João Neiva","Laranja da Terra","Linhares","Mantenópolis","Marataízes",
+    "Marechal Floriano","Marilândia","Mimoso do Sul","Montanha","Mucurici","Muniz Freire","Muqui","Nova Venécia",
+    "Pancas","Pedro Canário","Pinheiros","Piúma","Ponto Belo","Presidente Kennedy","Rio Bananal","Rio Novo do Sul",
+    "Santa Leopoldina","Santa Maria de Jetibá","Santa Teresa","São Domingos do Norte","São Gabriel da Palha",
+    "São José do Calçado","São Mateus","São Roque do Canaã","Serra","Sooretama","Vargem Alta",
+    "Venda Nova do Imigrante","Viana","Vila Pavão","Vila Valério","Vila Velha","Vitória"
+  ];
+  const ES_MUNICIPIOS_MAP = new Map(ES_MUNICIPIOS.map(n => [simplify(n), n]));
+
+  const MUNICIPIO_FIX_RAW = [
+    ["Cachoeiro de Itapemerim", "Cachoeiro de Itapemirim"],
+    ["Cachoeiro de Itapemirim - ES", "Cachoeiro de Itapemirim"],
+    ["Divino de São Lourenço - ES", "Divino de São Lourenço"],
+    ["Dores do Rio Preto - ES", "Dores do Rio Preto"],
+    ["Guaçuí - ES", "Guaçuí"],
+    ["Guaçuí- ES", "Guaçuí"],
+    ["Ibitirama - ES", "Ibitirama"],
+    ["Jerônimo Monteiro - ES", "Jerônimo Monteiro"],
+    ["Muniz Freire - ES", "Muniz Freire"],
+    ["Vila Velha - ES", "Vila Velha"],
+    ["Vitória - ES", "Vitória"],
+  ];
+  const MUNICIPIO_FIX = new Map(
+    MUNICIPIO_FIX_RAW.map(([from, to]) => [simplify(removeUfSuffix(from)), to])
+  );
+
+  const normalizeMunicipio = (raw) => {
+    if (!raw) return "";
+    let v = removeUfSuffix(raw);
+    if (!v) return "";
+
+    v = v.replace(/Itapemerim/gi, "Itapemirim").replace(/\s+/g, " ").trim();
+    const key = simplify(v);
+
+    if (MUNICIPIO_FIX.has(key)) return MUNICIPIO_FIX.get(key);
+    if (ES_MUNICIPIOS_MAP.has(key)) return ES_MUNICIPIOS_MAP.get(key);
+
+    const maxDist = key.length >= 12 ? 3 : 2;
+    let best = null, bestDist = Infinity;
+    for (const [k, official] of ES_MUNICIPIOS_MAP.entries()) {
+      const d = levenshtein(key, k);
+      if (d < bestDist) { bestDist = d; best = official; }
+      if (bestDist === 0) break;
+    }
+    if (best && bestDist <= maxDist) return best;
+
+    return v;
+  };
+
+  // =========================
+  // CAMPUS (mantido)
+  // =========================
+  const CAMPUS_CANON = [
+    "Alegre","Barra de São Francisco","Cachoeiro de Itapemirim","Colatina","Ibatiba","Itapina","Linhares",
+    "Montanha","Nova Venécia","Piúma","Santa Teresa","Vitória","IDAF","Outros"
+  ];
+  const CAMPUS_MAP = new Map(CAMPUS_CANON.map(n => [simplify(n), n]));
+  const CAMPUS_FIX = new Map([
+    ["alegre - es", "Alegre"], ["alegre es", "Alegre"], ["ifes campus de alegre", "Alegre"], ["ifes campus alegre", "Alegre"],
+    ["idaf", "IDAF"], ["i d a f", "IDAF"],
+    ["cachoeiro de itapemirim es", "Cachoeiro de Itapemirim"], ["cachoeiro de itapemirim - es", "Cachoeiro de Itapemirim"],
+    ["piuma - es", "Piúma"], ["piuma es", "Piúma"],
+    ["vitoria", "Vitória"], ["santa teresa", "Santa Teresa"], ["nova venecia", "Nova Venécia"],
+  ]);
+
+  const normalizeCampus = (raw) => {
+    let v = removeUfSuffix(raw);
+    if (!v) return "";
+    const k0 = simplify(v);
+    if (CAMPUS_FIX.has(k0)) return CAMPUS_FIX.get(k0);
+    const k = simplify(v);
+    if (CAMPUS_MAP.has(k)) return CAMPUS_MAP.get(k);
+
+    const maxDist = k.length >= 10 ? 3 : 2;
+    let best = null, bestD = Infinity;
+    for (const [kk, canon] of CAMPUS_MAP.entries()) {
+      const d = levenshtein(k, kk);
+      if (d < bestD) { bestD = d; best = canon; }
+      if (bestD === 0) break;
+    }
+    if (best && bestD <= maxDist) return best;
+    return v;
+  };
+
+  const statusNormalize = (s) => norm(s);
+
+  // -------------------------
+  // DOM refs (APÓS DOM pronto)
+  // -------------------------
+  const initDom = () => ({
     dimensao: document.getElementById("dimensao"),
     topN: document.getElementById("topN"),
     filtroCampus: document.getElementById("filtroCampus"),
@@ -41,250 +225,7 @@
     chart03: document.getElementById("chart03"),
     chart04: document.getElementById("chart04"),
     chart05: document.getElementById("chart05"),
-  };
-
-  let base = [];
-
-  // -------------------------
-  // Utils
-  // -------------------------
-  const norm = (v) => (v ?? "").toString().trim();
-
-  const simplify = (s) =>
-    norm(s)
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
-      .replace(/[\s\-_/]+/g, " ")
-      .trim()
-      .toLowerCase();
-
-  const removeUfSuffix = (s) => {
-    let v = norm(s);
-    if (!v) return "";
-    return v
-      .replace(/\s*-\s*ES\s*$/i, "")
-      .replace(/\s*\(\s*ES\s*\)\s*$/i, "")
-      .replace(/\s*\/\s*ES\s*$/i, "")
-      .replace(/\s*-\s*E\s*S\s*$/i, "") // “- E S”
-      .trim();
-  };
-
-  const uniqSorted = (arr) => {
-    const set = new Set(arr.map(norm).filter(Boolean));
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
-  };
-
-  // (1/3) getField — pega campo mesmo com variação de header (acento/case)
-  const getField = (row, ...names) => {
-    // 1) tentativa direta (nome exato)
-    for (const n of names) {
-      if (row && row[n] != null && String(row[n]).trim() !== "") return row[n];
-    }
-
-    // 2) fallback: bate ignorando acentos/case (pra headers tipo "Municipio")
-    const keys = row ? Object.keys(row) : [];
-    const wanted = names.map(simplify);
-
-    for (const k of keys) {
-      const ks = simplify(k);
-      if (wanted.includes(ks)) return row[k];
-    }
-
-    return "";
-  };
-
-  const loadCSV = () => new Promise((resolve, reject) => {
-    Papa.parse(CSV_URL, {
-      download: true,
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        if (results?.errors?.length) console.error("Erros CSV:", results.errors);
-        resolve(results.data || []);
-      },
-      error: (err) => reject(err),
-    });
   });
-
-  // -------------------------
-  // Levenshtein (fuzzy match)
-  // -------------------------
-  const levenshtein = (a, b) => {
-    a = simplify(a);
-    b = simplify(b);
-    const m = a.length, n = b.length;
-    if (m === 0) return n;
-    if (n === 0) return m;
-
-    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-    for (let i = 0; i <= m; i++) dp[i][0] = i;
-    for (let j = 0; j <= n; j++) dp[0][j] = j;
-
-    for (let i = 1; i <= m; i++) {
-      for (let j = 1; j <= n; j++) {
-        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-        dp[i][j] = Math.min(
-          dp[i - 1][j] + 1,       // delete
-          dp[i][j - 1] + 1,       // insert
-          dp[i - 1][j - 1] + cost // replace
-        );
-      }
-    }
-    return dp[m][n];
-  };
-
-  // =========================
-  // MUNICÍPIOS: lista oficial ES (78)
-  // =========================
-  const ES_MUNICIPIOS = [
-    "Afonso Cláudio","Águia Branca","Alegre","Alfredo Chaves","Alto Rio Novo","Anchieta","Apiacá","Aracruz",
-    "Atílio Vivácqua","Baixo Guandu","Barra de São Francisco","Boa Esperança","Bom Jesus do Norte","Brejetuba",
-    "Cachoeiro de Itapemirim","Cariacica","Castelo","Colatina","Conceição da Barra","Conceição do Castelo",
-    "Divino de São Lourenço","Domingos Martins","Dores do Rio Preto","Ecoporanga","Fundão","Governador Lindenberg",
-    "Guaçuí","Guarapari","Ibatiba","Ibiraçu","Ibitirama","Iconha","Irupi","Itaguaçu","Itapemirim","Itarana","Iúna",
-    "Jaguaré","Jerônimo Monteiro","João Neiva","Laranja da Terra","Linhares","Mantenópolis","Marataízes",
-    "Marechal Floriano","Marilândia","Mimoso do Sul","Montanha","Mucurici","Muniz Freire","Muqui","Nova Venécia",
-    "Pancas","Pedro Canário","Pinheiros","Piúma","Ponto Belo","Presidente Kennedy","Rio Bananal","Rio Novo do Sul",
-    "Santa Leopoldina","Santa Maria de Jetibá","Santa Teresa","São Domingos do Norte","São Gabriel da Palha",
-    "São José do Calçado","São Mateus","São Roque do Canaã","Serra","Sooretama","Vargem Alta",
-    "Venda Nova do Imigrante","Viana","Vila Pavão","Vila Valério","Vila Velha","Vitória"
-  ];
-
-  const ES_MUNICIPIOS_MAP = new Map(ES_MUNICIPIOS.map(n => [simplify(n), n]));
-
-  // Correções explícitas: escreva "humano" (com/sem - ES); chave é normalizada automaticamente
-  const MUNICIPIO_FIX_RAW = [
-    ["Cachoeiro de Itapemerim", "Cachoeiro de Itapemirim"],
-    ["Cachoeiro de Itapemirim - ES", "Cachoeiro de Itapemirim"],
-    ["Divino de São Lourenço - ES", "Divino de São Lourenço"],
-    ["Dores do Rio Preto - ES", "Dores do Rio Preto"],
-    ["Guaçuí - ES", "Guaçuí"],
-    ["Guaçuí- ES", "Guaçuí"],
-    ["Ibitirama - ES", "Ibitirama"],
-    ["Jerônimo Monteiro - ES", "Jerônimo Monteiro"],
-    ["Muniz Freire - ES", "Muniz Freire"],
-    ["Vila Velha - ES", "Vila Velha"],
-    ["Vitória - ES", "Vitória"],
-  ];
-
-  const MUNICIPIO_FIX = new Map(
-    MUNICIPIO_FIX_RAW.map(([from, to]) => [simplify(removeUfSuffix(from)), to])
-  );
-
-  // (2/3) normalizeMunicipio — normaliza sempre para nome limpo (sem "- ES")
-  const normalizeMunicipio = (raw) => {
-    if (!raw) return "";
-
-    // base
-    let v = norm(raw);
-    if (!v) return "";
-
-    // remove UF
-    v = removeUfSuffix(v);
-
-    // correções diretas comuns
-    v = v
-      .replace(/Itapemerim/gi, "Itapemirim")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    const key = simplify(v);
-
-    // 1) correções explícitas
-    if (MUNICIPIO_FIX.has(key)) return MUNICIPIO_FIX.get(key);
-
-    // 2) match exato lista oficial
-    if (ES_MUNICIPIOS_MAP.has(key)) return ES_MUNICIPIOS_MAP.get(key);
-
-    // 3) fuzzy (último recurso)
-    const maxDist = key.length >= 12 ? 3 : 2;
-    let best = null;
-    let bestDist = Infinity;
-
-    for (const [k, official] of ES_MUNICIPIOS_MAP.entries()) {
-      const d = levenshtein(key, k);
-      if (d < bestDist) {
-        bestDist = d;
-        best = official;
-      }
-      if (bestDist === 0) break;
-    }
-
-    if (best && bestDist <= maxDist) return best;
-
-    // fallback seguro
-    return v;
-  };
-
-  // =========================
-  // CAMPUS (mantido como você já tinha certo)
-  // =========================
-  const CAMPUS_CANON = [
-    "Alegre",
-    "Barra de São Francisco",
-    "Cachoeiro de Itapemirim",
-    "Colatina",
-    "Ibatiba",
-    "Itapina",
-    "Linhares",
-    "Montanha",
-    "Nova Venécia",
-    "Piúma",
-    "Santa Teresa",
-    "Vitória",
-    "IDAF",
-    "Outros"
-  ];
-
-  const CAMPUS_MAP = new Map(CAMPUS_CANON.map(n => [simplify(n), n]));
-
-  const CAMPUS_FIX = new Map([
-    ["alegre - es", "Alegre"],
-    ["alegre es", "Alegre"],
-    ["ifes campus de alegre", "Alegre"],
-    ["ifes campus alegre", "Alegre"],
-
-    ["idaf", "IDAF"],
-    ["i d a f", "IDAF"],
-
-    ["cachoeiro de itapemirim es", "Cachoeiro de Itapemirim"],
-    ["cachoeiro de itapemirim - es", "Cachoeiro de Itapemirim"],
-
-    ["piuma - es", "Piúma"],
-    ["piuma es", "Piúma"],
-
-    ["vitoria", "Vitória"],
-    ["santa teresa", "Santa Teresa"],
-    ["nova venecia", "Nova Venécia"],
-  ]);
-
-  const normalizeCampus = (raw) => {
-    let v = removeUfSuffix(raw);
-    if (!v) return "";
-
-    const key0 = simplify(v);
-    if (CAMPUS_FIX.has(key0)) return CAMPUS_FIX.get(key0);
-
-    const key = simplify(v);
-    if (CAMPUS_MAP.has(key)) return CAMPUS_MAP.get(key);
-
-    const maxDist = key.length >= 10 ? 3 : 2;
-    let best = null;
-    let bestD = Infinity;
-
-    for (const [k, canon] of CAMPUS_MAP.entries()) {
-      const d = levenshtein(key, k);
-      if (d < bestD) { bestD = d; best = canon; }
-      if (bestD === 0) break;
-    }
-
-    if (best && bestD <= maxDist) return best;
-    return v;
-  };
-
-  // =========================
-  // STATUS
-  // =========================
-  const statusNormalize = (s) => norm(s);
 
   // =========================
   // DIM / FILTERS
@@ -295,19 +236,15 @@
     if (d === "municipio") return COL.municipio;
     return COL.orientador;
   };
-
   const getDimValue = () => norm(el.dimensao?.value);
-
   const getDimLabel = () => {
     const v = getDimValue();
     return v === "campus" ? "Campus" : v === "municipio" ? "Município" : "Orientador";
   };
-
   const getFilters = () => ({
     campus: norm(el.filtroCampus?.value),
     municipio: norm(el.filtroMunicipio?.value),
   });
-
   const applyFilters = (rows, f) => rows.filter((r) => {
     if (f.campus && norm(r[COL.campus]) !== f.campus) return false;
     if (f.municipio && norm(r[COL.municipio]) !== f.municipio) return false;
@@ -319,7 +256,6 @@
   // =========================
   const buildPivot = (rows, dimKey, dimValue) => {
     const pivot = new Map();
-
     for (const r of rows) {
       const rowLabel = norm(r[dimKey]) || "Não informado";
       const st = statusNormalize(r[COL.status]) || "Não informado";
@@ -330,7 +266,6 @@
         obj.__total = 0;
         pivot.set(rowLabel, obj);
       }
-
       const obj = pivot.get(rowLabel);
       if (obj[st] !== undefined) {
         obj[st] += 1;
@@ -339,22 +274,19 @@
     }
 
     let arr = Array.from(pivot.entries()).map(([label, counts]) => ({ label, ...counts }));
-
     if (dimValue === "municipio") arr.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
     else arr.sort((a, b) => (b.__total || 0) - (a.__total || 0));
-
     return arr;
   };
 
   // =========================
-  // HEATMAP
+  // HEATMAP + TABLE
   // =========================
   const lerp = (a, b, t) => a + (b - a) * t;
 
   const heatColor = (value, min, max) => {
     if (max <= min) return "rgba(255,255,255,0)";
     const t = (value - min) / (max - min);
-
     const mid = 0.5;
     let r, g, b;
 
@@ -369,7 +301,6 @@
       g = lerp(215, 200, tt);
       b = lerp(105, 155, tt);
     }
-
     return `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},0.95)`;
   };
 
@@ -380,6 +311,8 @@
   };
 
   const renderPivotTable = (pivotRows, dimLabel, topN) => {
+    if (!el.pivotHead || !el.pivotBody || !el.pivotFoot) return;
+
     const rows = pivotRows.slice(0, topN);
 
     const mins = {};
@@ -423,7 +356,6 @@
     const colTotals = {};
     for (const s of STATUS_KEYS) colTotals[s.key] = 0;
     let grand = 0;
-
     for (const r of rows) {
       for (const s of STATUS_KEYS) colTotals[s.key] += (r[s.key] || 0);
       grand += (r.__total || 0);
@@ -442,7 +374,7 @@
   // CHARTS
   // =========================
   const renderChart = (targetDiv, title, xLabels, yValues) => {
-    if (!targetDiv) return;
+    if (!targetDiv || typeof Plotly === "undefined") return;
 
     const data = [{
       type: "bar",
@@ -501,24 +433,16 @@
     }
   };
 
-  // (3/3) initFilterOptions — re-normaliza municípios na hora de montar o dropdown
+  // initFilterOptions atualizado (re-normaliza antes de montar dropdown)
   const initFilterOptions = (rows) => {
-    const campi = uniqSorted(
-      rows.map(r => r[COL.campus]).filter(Boolean)
-    );
-
-    const municipios = uniqSorted(
-      rows
-        .map(r => normalizeMunicipio(r[COL.municipio]))
-        .filter(Boolean)
-    );
-
+    const campi = uniqSorted(rows.map(r => r[COL.campus]).filter(Boolean));
+    const municipios = uniqSorted(rows.map(r => normalizeMunicipio(r[COL.municipio])).filter(Boolean));
     fillSelect(el.filtroCampus, campi);
     fillSelect(el.filtroMunicipio, municipios);
   };
 
   // =========================
-  // REFRESH
+  // REFRESH + Events
   // =========================
   const refresh = () => {
     const dimKey = getDimKey();
@@ -540,7 +464,7 @@
 
     setTimeout(() => {
       [el.chart01, el.chart02, el.chart03, el.chart04, el.chart05].forEach(div => {
-        if (div) Plotly.Plots.resize(div);
+        if (div && typeof Plotly !== "undefined") Plotly.Plots.resize(div);
       });
     }, 50);
   };
@@ -560,10 +484,12 @@
     window.addEventListener("resize", () => refresh());
   };
 
-  // Atualizado: carrega e normaliza com getField (tolerante a headers "Municipio"/"Município")
+  // document.addEventListener atualizado (usa getField e initDom)
   document.addEventListener("DOMContentLoaded", async () => {
     try {
+      el = initDom();          // <- AGORA o DOM existe
       wireEvents();
+
       base = await loadCSV();
 
       base = base
@@ -576,7 +502,7 @@
             [COL.campus]: normalizeCampus(rawCampus),
             [COL.municipio]: normalizeMunicipio(rawMunicipio),
             [COL.orientador]: norm(getField(r, COL.orientador)),
-            [COL.status]: statusNormalize(getField(r, COL.status)),
+            [COL.status]: statusNormalize(getField(r, COL.status, "STATUS", "status")),
           };
         })
         .filter(r => r[COL.status]);
@@ -584,9 +510,11 @@
       initFilterOptions(base);
       refresh();
     } catch (e) {
-      console.error("Falha ao carregar CSV:", e);
-      if (el.kpiTotal) el.kpiTotal.textContent = "Erro";
+      console.error("Falha ao carregar/renderizar:", e);
+      alert(e?.message || e);
     }
   });
 
+  // (opcional) debug no console
+  window.normalizeMunicipio = normalizeMunicipio;
 })();
