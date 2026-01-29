@@ -151,47 +151,61 @@
   ]);
 
 const normalizeMunicipio = (raw) => {
-  let v = removeUfSuffix(raw);
-  if (!v) return "";
+  if (!raw) return "";
 
-  // correções diretas comuns
-  v = v.replace(/Itapemerim/gi, "Itapemirim");
-  v = v.replace(/\s+/g, " ").trim();
+  // 1) normaliza string base
+  let v = raw.toString().trim();
 
+  // 2) remove sufixos de UF (antes de qualquer outra coisa)
+  v = v
+    .replace(/\s*-\s*ES\s*$/i, "")
+    .replace(/\s*\(\s*ES\s*\)\s*$/i, "")
+    .replace(/\s*\/\s*ES\s*$/i, "")
+    .replace(/\s*-\s*E\s*S\s*$/i, "")
+    .trim();
+
+  // 3) corrige erros de digitação conhecidos (regex direto)
+  v = v
+    .replace(/Itapemerim/gi, "Itapemirim")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // 4) forma simplificada para comparação
   const key = simplify(v);
 
-  // 1) correções explícitas
-  if (MUNICIPIO_FIX.has(key)) return MUNICIPIO_FIX.get(key);
+  // 5) correções explícitas (Map deve ter chaves já simplificadas)
+  if (MUNICIPIO_FIX.has(key)) {
+    return MUNICIPIO_FIX.get(key);
+  }
 
-  // 2) match exato com lista oficial
-  if (ES_MUNICIPIOS_MAP.has(key)) return ES_MUNICIPIOS_MAP.get(key);
+  // 6) match exato com lista oficial do ES
+  if (ES_MUNICIPIOS_MAP.has(key)) {
+    return ES_MUNICIPIOS_MAP.get(key);
+  }
 
-  // 3) fuzzy match...
-  // (resto igual)
-  ...
+  // 7) fuzzy match (último recurso)
+  const maxDist = key.length >= 12 ? 3 : 2;
+  let best = null;
+  let bestDist = Infinity;
+
+  for (const [k, official] of ES_MUNICIPIOS_MAP.entries()) {
+    const d = levenshtein(key, k);
+    if (d < bestDist) {
+      bestDist = d;
+      best = official;
+    }
+    if (bestDist === 0) break;
+  }
+
+  if (best && bestDist <= maxDist) {
+    return best;
+  }
+
+  // 8) fallback seguro (já sem "- ES")
+  return v;
 };
 
-  // =========================
-  // CAMPUS: dicionário simples (baseado na sua foto)
-  // =========================
-  // Regra: colapsar variações para um conjunto pequeno e consistente.
-  const CAMPUS_CANON = [
-    "Alegre",
-    "Barra de São Francisco",
-    "Cachoeiro de Itapemirim",
-    "Colatina",
-    "Ibatiba",
-    "Itapina",
-    "Linhares",
-    "Montanha",
-    "Nova Venécia",
-    "Piúma",
-    "Santa Teresa",
-    "Vitória",
-    "IDAF",      // aparece como origem/colaborador
-    "Outros"     // se você já usa “Outros”
-  ];
-
+  
   const CAMPUS_MAP = new Map(CAMPUS_CANON.map(n => [simplify(n), n]));
 
   const CAMPUS_FIX = new Map([
