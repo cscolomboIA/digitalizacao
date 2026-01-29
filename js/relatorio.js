@@ -133,8 +133,6 @@
   // índice simplificado -> nome oficial
   const ES_MUNICIPIOS_MAP = new Map(ES_MUNICIPIOS.map(n => [simplify(n), n]));
 
-  // Correções explícitas (além do fuzzy)
-// Você pode escrever aqui com acento e com/sem "- ES" que o código normaliza as chaves.
 const MUNICIPIO_FIX_RAW = [
   ["Cachoeiro de Itapemerim", "Cachoeiro de Itapemirim"],
   ["Cachoeiro de Itapemirim - ES", "Cachoeiro de Itapemirim"],
@@ -150,10 +148,11 @@ const MUNICIPIO_FIX_RAW = [
   ["Vitória - ES", "Vitória"],
 ];
 
-// Normaliza as chaves do FIX para bater com o key = simplify(v) (já sem UF)
+// chave do Map é a MESMA chave que o normalizeMunicipio usa: simplify(removeUfSuffix(...))
 const MUNICIPIO_FIX = new Map(
   MUNICIPIO_FIX_RAW.map(([from, to]) => [simplify(removeUfSuffix(from)), to])
 );
+
 
 
 const normalizeMunicipio = (raw) => {
@@ -211,7 +210,9 @@ const normalizeMunicipio = (raw) => {
   return v;
 };
 
-  window.normalizeMunicipio = normalizeMunicipio;
+  // ===== DEBUG (não afeta produção): expõe função no console =====
+window.normalizeMunicipio = normalizeMunicipio;
+// =============================================================
   
   const CAMPUS_MAP = new Map(CAMPUS_CANON.map(n => [simplify(n), n]));
 
