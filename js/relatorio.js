@@ -25,30 +25,36 @@
   // -------------------------
   const norm = (v) => (v ?? "").toString().trim();
 
-  const simplify = (s) =>
-    norm(s)
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .replace(/[\s\-_/]+/g, " ")
-      .trim()
-      .toLowerCase();
+const simplify = (s) =>
+  norm(s)
+    .replace(/\u00A0/g, " ")                 // NBSP -> espaço normal
+    .replace(/[‐-‒–—−]/g, "-")               // todos os "dashes" unicode -> "-"
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+    .replace(/[\s\-_/]+/g, " ")              // normaliza separadores
+    .trim()
+    .toLowerCase();
 
-  const removeUfSuffix = (s) => {
-    let v = norm(s);
-    if (!v) return "";
-    return v
-      .replace(/\s*-\s*ES\s*$/i, "")
-      .replace(/\s*\(\s*ES\s*\)\s*$/i, "")
-      .replace(/\s*\/\s*ES\s*$/i, "")
-      .replace(/\s*-\s*E\s*S\s*$/i, "")
-      .trim();
-  };
+const removeUfSuffix = (s) => {
+  let v = norm(s)
+    .replace(/\u00A0/g, " ")
+    .replace(/[‐-‒–—−]/g, "-");             // garante "-" padrão
+  if (!v) return "";
+
+  return v
+    .replace(/\s*-\s*ES\s*$/i, "")
+    .replace(/\s*\(\s*ES\s*\)\s*$/i, "")
+    .replace(/\s*\/\s*ES\s*$/i, "")
+    .replace(/\s*-\s*E\s*S\s*$/i, "")
+    .trim();
+};
+
 
   const uniqSorted = (arr) => {
     const set = new Set(arr.map(norm).filter(Boolean));
     return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
   };
 
-  // ✅ getField (tolerante a variações de header: acento/case)
+  // getField (tolerante a variações de header: acento/case)
   const getField = (row, ...names) => {
     // 1) tentativa direta
     for (const n of names) {
