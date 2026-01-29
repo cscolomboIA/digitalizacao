@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <title>IntegraCAR · Relatório (Pivôs)</title>
+
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="stylesheet" href="style.css"/>
+
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    /* Apenas o necessário para ficar bem parecido com as imagens */
+    .report-grid {
+      display: grid;
+      grid-template-columns: 1.25fr 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    @media (max-width: 1100px) {
+      .report-grid { grid-template-columns: 1fr; }
+    }
+
+    .pivot-wrap {
+      overflow: auto;
+      border-radius: 12px;
+      border: 1px solid #e7e7e7;
+      background: #fff;
+    }
+
+    table.pivot {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 900px;
+      font-size: 13px;
+    }
+    table.pivot thead th {
+      position: sticky;
+      top: 0;
+      background: #0f3d33; /* parecido com o verde do Google Sheets */
+      color: #fff;
+      padding: 10px 10px;
+      text-align: left;
+      font-weight: 600;
+      z-index: 2;
+      border-bottom: 1px solid rgba(255,255,255,0.15);
+      white-space: nowrap;
+    }
+    table.pivot tbody td, table.pivot tbody th {
+      padding: 9px 10px;
+      border-bottom: 1px solid #f0f0f0;
+      white-space: nowrap;
+    }
+    table.pivot tbody th {
+      background: #fff;
+      font-weight: 600;
+    }
+    table.pivot tfoot td, table.pivot tfoot th {
+      position: sticky;
+      bottom: 0;
+      background: #ffffff;
+      border-top: 2px solid #eaeaea;
+      padding: 10px 10px;
+      font-weight: 700;
+      z-index: 1;
+    }
+
+    .cell-num {
+      text-align: left; /* nas imagens o número fica mais “colado” à esquerda */
+      font-variant-numeric: tabular-nums;
+    }
+
+    .controls-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: end;
+      margin-bottom: 12px;
+    }
+    .controls-row .filter-group {
+      min-width: 220px;
+    }
+
+    .charts-stack .panel {
+      margin-bottom: 14px;
+    }
+
+    .hint {
+      color: #666;
+      font-size: 13px;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+
+<body>
+<header class="header">
+  <div class="brand compact-header">
+    <img class="logo" src="logo.png" alt="IntegraCAR"/>
+    <div class="brand-text"><h1>IntegraCAR · Relatório (Pivôs)</h1></div>
+  </div>
+</header>
+
+<nav class="topnav">
+  <a href="index.html">Dashboard</a>
+  <a href="map.html">Mapa ES</a>
+  <a href="gestao.html">Painel de Gestão</a>
+  <a href="relatorio.html" class="active">Relatório</a>
+</nav>
+
+<main class="container">
+
+  <section class="filters card">
+    <div class="controls-row">
+      <div class="filter-group">
+        <label for="dimensao">Dimensão (linhas)</label>
+        <select id="dimensao">
+          <option value="orientador">Orientador</option>
+          <option value="campus">Campus</option>
+          <option value="municipio">Município</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="topN">Quantidade de linhas</label>
+        <select id="topN">
+          <option value="20">Top 20</option>
+          <option value="30" selected>Top 30</option>
+          <option value="50">Top 50</option>
+          <option value="9999">Todas</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="filtroCampus">Filtrar Campus (opcional)</label>
+        <select id="filtroCampus">
+          <option value="">Todos</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="filtroMunicipio">Filtrar Município (opcional)</label>
+        <select id="filtroMunicipio">
+          <option value="">Todos</option>
+        </select>
+      </div>
+
+      <button id="btnLimpar" class="btn">Limpar filtros</button>
+    </div>
+
+    <div class="hint">
+      Esta página gera uma tabela no estilo “pivô” (com heatmap) e gráficos “01..05 versus dimensão”, parecidos com os do Google Sheets.
+    </div>
+  </section>
+
+  <section class="cards kpis">
+    <div class="card kpi"><div class="card-title">Total de Registros (recorte)</div><div id="kpiTotal" class="card-value">0</div></div>
+    <div class="card kpi"><div class="card-title">Linhas na Tabela</div><div id="kpiLinhas" class="card-value">0</div></div>
+    <div class="card kpi"><div class="card-title">Campi no Recorte</div><div id="kpiCampi" class="card-value">0</div></div>
+    <div class="card kpi"><div class="card-title">Municípios no Recorte</div><div id="kpiMunicipios" class="card-value">0</div></div>
+  </section>
+
+  <section class="report-grid">
+    <div class="panel">
+      <div class="panel-header">
+        <h2 id="tituloTabela">Tabela (Pivô)</h2>
+      </div>
+
+      <div class="pivot-wrap">
+        <table class="pivot" id="pivotTable">
+          <thead id="pivotHead"></thead>
+          <tbody id="pivotBody"></tbody>
+          <tfoot id="pivotFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="charts-stack">
+      <div class="panel">
+        <div class="panel-header"><h2 id="tituloGraficos">Gráficos</h2></div>
+        <div id="chart01" style="height:260px;"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><h2></h2></div>
+        <div id="chart02" style="height:260px;"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><h2></h2></div>
+        <div id="chart03" style="height:260px;"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><h2></h2></div>
+        <div id="chart04" style="height:260px;"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><h2></h2></div>
+        <div id="chart05" style="height:260px;"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">IntegraCAR Dashboard — GitHub Pages</footer>
+
+<script src="js/relatorio.js"></script>
+</body>
+</html>
